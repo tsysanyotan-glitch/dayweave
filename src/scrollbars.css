@@ -1,0 +1,10 @@
+/* Hide only the scrollbar chrome; keep native wheel, touch and keyboard scrolling. */
+* {
+  scrollbar-width: none;
+}
+
+*::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}

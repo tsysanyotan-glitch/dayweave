@@ -8,13 +8,14 @@
 
 任务类型补充设计：[电脑](docs/design/dayweave-task-types-desktop.png) · [手机](docs/design/dayweave-task-types-mobile.png) · [提示词](docs/design/task-types-prompts.md)。以上设计图均在对应功能编码前生成。
 
-## v0.2.2 功能
+## v0.2.3 功能
 
 - 按日期创建任务、提前安排其他日期；周视图、月历与历史日期跳转。
 - 待办任务 / 进行中 / 已结束；状态分组和每个任务可展开或折叠。
 - 区分「计划任务」和「零碎问题」：前者用绿色清单图标，后者用琥珀色扳手、文字标签和浅色底；精简窗口仍显示不同图标。类型独立于状态和优先级。
 - 按任务类型筛选，在零碎问题筛选下创建任务时默认选中该类型；编辑时可随时转换。旧任务默认归为计划任务。
 - 拖动任务左侧把手，在状态分组之间移动或调整顺序；手机支持触控拖动，键盘支持空格提起、方向键选状态、回车放下。
+- 主页面、设置和任务弹窗隐藏可见滚动条，保留滚轮、触控板、触屏和键盘滚动。
 - Windows 去掉系统标题栏，窗口按钮融入应用右上角；拖动顶部空白区域移动窗口，双击最大化或还原，滚动时窗口按钮仍可用。
 - 精简任务视图；Windows 客户端缩为小窗口，可置顶、最小化，并恢复完整窗口。
 - 每项任务可关联产出文档或项目文件夹，已结束任务也可继续添加。文件默认只保存在本机，逐项确认后才上传私有云端副本。
@@ -81,4 +82,4 @@ CI 检查类型、单元测试和桌面 / 手机浏览器交互。手动运行 W
 - 本机任务默认保存在应用的 WebView 数据目录或浏览器 IndexedDB；应定期导出备份。
 - 建议各端使用同一新版客户端；早于 v0.2.1 的版本不识别任务类型，混用旧版编辑可能让该任务回到默认类型。
 
-更多产品建议、阶段取舍和验收说明见 [产品设计与路线](docs/product-plan.md)、[窗口顶栏验证](docs/verification-titlebar.md)、[任务类型验证](docs/verification-task-types.md)、[v0.2 验证记录](docs/verification-v2.md) 与 [v0.1 验证记录](docs/verification.md)。
+更多产品建议、阶段取舍和验收说明见 [产品设计与路线](docs/product-plan.md)、[滚动条调整验证](docs/verification-scrollbars.md)、[窗口顶栏验证](docs/verification-titlebar.md)、[任务类型验证](docs/verification-task-types.md)、[v0.2 验证记录](docs/verification-v2.md) 与 [v0.1 验证记录](docs/verification.md)。
