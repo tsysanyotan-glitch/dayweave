@@ -18,7 +18,12 @@
 
 ## Windows 构建
 
-使用 Windows x64、Rust 1.97.1、Visual Studio 2022 C++ Build Tools、WebView2 155。最终安装包与运行检查在交付时记录于此。
+使用 Windows x64、Rust 1.97.1、Visual Studio 2022 C++ Build Tools、WebView2 155，release 构建通过。
+
+- NSIS 安装包：1,416,548 字节，约 1.35 MiB；程序本体：3,827,200 字节，约 3.65 MiB。安装包复用系统 WebView2；缺少时需联网下载运行时。
+- 已启动实际 release 程序，验证 WebView2 渲染、任务创建与刷新后的本机保存、真实云账号登录与读取、退出后的本机任务隔离，未出现页面运行错误。
+- 安装包 SHA-256：`0E117B0064948FED3AC500F41188746C4B14436151ADF1E9DD77D9D373521D78`。
+- 尚未执行完整的安装 / 卸载及不同 Windows 系统版本验证；没有配置商业代码签名。
 
 ## 云端检查与运行边界
 
@@ -26,7 +31,7 @@
 - 安全检查仅剩 Auth 的“泄露密码检查未启用”提示，可按 [Supabase 密码安全文档](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection) 在项目设置中评估启用；未擅自更改项目的认证策略。
 - 性能检查提示新建的 `tasks_user_updated_idx` 暂无使用统计；当前读取使用用户与任务主键索引，数据量很小时不代表性能问题。
 - Android 原生 APK、公网网页部署、商业代码签名、系统通知与自动更新尚未完成。手机浏览器布局测试不替代 Android 真机验证。
-- GitHub 工作流已编写；本地检查结果不等同于远端 Actions 已执行。
+- GitHub 的 [首次源码 CI](https://github.com/tsysanyotan-glitch/dayweave/actions/runs/39367732573) 已实际执行并成功，包括 Ubuntu Chromium 的生产构建与桌面 / 手机交互测试。Windows 安装包当前由本机工具链生成，手动打包工作流可供后续使用。
 
-一次性联调账号与任务在验证完成后清理，不保留为用户的真实数据。首版不声称经过长期离线、万级任务或多地区网络压力测试。
+一次性联调账号与任务已清理，确认残留测试账号为零，本机测试凭据文件也已移除。首版不声称经过长期离线、万级任务或多地区网络压力测试。
 
