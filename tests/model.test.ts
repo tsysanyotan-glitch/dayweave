@@ -28,6 +28,15 @@ describe('calendar and validation', () => {
     expect(() => readBackup('{"tasks":[]}')).toThrow()
     expect(() => validateTask({ ...local.task, steps: [{ id: 'a', title: '', done: false }] })).toThrow()
   })
+  it('keeps task type through sync and backups while treating older tasks as planned work', () => {
+    const { local, remote } = fixture()
+    const { kind: _kind, ...legacy } = local.task
+    expect(validateTask(legacy).kind).toBe('planned')
+    const issue = { ...remote.document, kind: 'issue' as const, status: 'done' as const }
+    expect(fromRemote(scope, { ...remote, document: issue }).task.kind).toBe('issue')
+    expect(readBackup(JSON.stringify({ format: 'dayweave', version: 1, tasks: [issue] }))[0].kind).toBe('issue')
+    expect(() => validateTask({ ...issue, kind: 'urgent' })).toThrow('类型')
+  })
 })
 describe('sync without lost edits', () => {
   it('preserves both versions on a conflict', () => {

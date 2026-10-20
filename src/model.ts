@@ -1,9 +1,10 @@
 export type Status = 'todo' | 'doing' | 'done'
 export type Priority = 'high' | 'medium' | 'low'
+export type TaskKind = 'planned' | 'issue'
 export interface Step { id: string; title: string; done: boolean }
 export interface Output { id: string; name: string; kind: 'file' | 'folder'; size?: number; cloudPath?: string }
 export interface Task {
-  id: string; title: string; note: string; date: string; status: Status
+  id: string; title: string; note: string; date: string; status: Status; kind: TaskKind
   priority: Priority; assignee: string; project: string; link: string
   waiting: boolean; starred: boolean; steps: Step[]; outputs: Output[]; order?: number
   createdAt: string; updatedAt: string; deletedAt: string | null
@@ -18,6 +19,8 @@ export interface LocalRecord {
 }
 export const statusLabels: Record<Status, string> = { doing: '进行中', todo: '待办任务', done: '已结束' }
 export const priorityLabels: Record<Priority, string> = { high: '高优先', medium: '普通', low: '低优先' }
+export const kindLabels: Record<TaskKind, string> = { planned: '计划任务', issue: '零碎问题' }
+export const taskKind = (task: Task): TaskKind => task.kind ?? 'planned'
 export const uuid = () => crypto.randomUUID()
 export function dateKey(date = new Date()): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -31,7 +34,7 @@ export function validDate(value: unknown): value is string {
 }
 export function newTask(date = dateKey()): Task {
   const now = new Date().toISOString()
-  return { id: uuid(), title: '', note: '', date, status: 'todo', priority: 'medium', assignee: '自己', project: '', link: '', waiting: false, starred: false, steps: [], outputs: [], createdAt: now, updatedAt: now, deletedAt: null }
+  return { id: uuid(), title: '', note: '', date, status: 'todo', kind: 'planned', priority: 'medium', assignee: '自己', project: '', link: '', waiting: false, starred: false, steps: [], outputs: [], createdAt: now, updatedAt: now, deletedAt: null }
 }
 export function safeLink(value: string): string | null {
   if (!value) return null
@@ -44,6 +47,7 @@ export function validateTask(value: unknown): Task {
   if (typeof t.title !== 'string' || !t.title.trim() || t.title.length > 300) throw new Error('任务标题需要 1–300 个字符')
   if (!validDate(t.date)) throw new Error('任务日期无效')
   if (!['todo', 'doing', 'done'].includes(t.status) || !['high', 'medium', 'low'].includes(t.priority)) throw new Error('任务状态无效')
+  if (t.kind !== undefined && !['planned', 'issue'].includes(t.kind)) throw new Error('任务类型无效')
   for (const field of ['note', 'assignee', 'project', 'link'] as const) {
     if (typeof t[field] !== 'string' || t[field].length > (field === 'note' ? 20000 : 2000)) throw new Error('任务字段格式无效')
   }
@@ -57,7 +61,7 @@ export function validateTask(value: unknown): Task {
   if (outputs.length > 100 || new Set(outputs.map(o => o.id)).size !== outputs.length) throw new Error('任务产出最多 100 项，且不能重复')
   if (t.order !== undefined && (typeof t.order !== 'number' || !Number.isFinite(t.order) || Math.abs(t.order) > 1e16)) throw new Error('任务顺序无效')
   // Whitelist synchronized fields. Native paths and browser file bytes never enter tasks.
-  return { id: t.id, title: t.title.trim(), note: t.note, date: t.date, status: t.status, priority: t.priority, assignee: t.assignee, project: t.project, link: t.link, waiting: t.waiting, starred: t.starred, steps: t.steps.map(s => ({ id: s.id, title: s.title.trim(), done: s.done })), outputs, ...(t.order === undefined ? {} : { order: t.order }), createdAt: t.createdAt, updatedAt: t.updatedAt, deletedAt: t.deletedAt }
+  return { id: t.id, title: t.title.trim(), note: t.note, date: t.date, status: t.status, kind: taskKind(t), priority: t.priority, assignee: t.assignee, project: t.project, link: t.link, waiting: t.waiting, starred: t.starred, steps: t.steps.map(s => ({ id: s.id, title: s.title.trim(), done: s.done })), outputs, ...(t.order === undefined ? {} : { order: t.order }), createdAt: t.createdAt, updatedAt: t.updatedAt, deletedAt: t.deletedAt }
 }
 export function validateOutput(value: unknown): Output {
   const o = value as Output
