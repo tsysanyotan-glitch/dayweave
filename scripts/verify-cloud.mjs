@@ -54,6 +54,38 @@ try {
   await expect.poll(async () => { const { data } = await clients[0].from('tasks').select('*'); return data.length }).toBe(2)
   const isolated = await clients[1].from('tasks').select('*'); if (isolated.error || isolated.data.length) throw new Error('Cross-user data visible')
   console.log('PASS: real Auth login, two-device Realtime, offline edits, conflict preservation, third-device account isolation, anonymous access check')
+  const storage = clients[0].storage.from('task-outputs')
+  const list = await storage.list(accounts[0].id); if (list.error || list.data.length) throw new Error('Use empty disposable storage accounts')
+  const taskDocument = async () => { const { data, error } = await clients[0].from('tasks').select('*'); if (error) throw error; return data.find(r => r.document.title === '真实云同步测试')?.document }
+  await pages[0].getByRole('button', { name: '展开：真实云同步测试', exact: true }).click()
+  await pages[0].getByLabel('选择本机产出文件').setInputFiles({ name: '交付文档.txt', mimeType: 'text/plain', buffer: Buffer.from('DayWeave v2 private output') })
+  await expect(pages[0].getByTestId('output-row')).toContainText('仅在本机')
+  await expect.poll(async () => (await taskDocument()).outputs?.length).toBe(1)
+  if ((await storage.list(accounts[0].id)).data.length) throw new Error('Local file uploaded automatically')
+  if (await pages[1].getByRole('button', { name: '展开：真实云同步测试', exact: true }).count()) await pages[1].getByRole('button', { name: '展开：真实云同步测试', exact: true }).click()
+  await expect(pages[1].getByTestId('output-row')).toContainText('仅在原电脑', { timeout: 15000 })
+  await pages[0].getByRole('button', { name: '上传到云端', exact: true }).click()
+  if ((await storage.list(accounts[0].id)).data.length) throw new Error('Upload started before confirmation')
+  await pages[0].getByRole('button', { name: '确认上传', exact: true }).click()
+  await expect.poll(async () => !!(await taskDocument()).outputs?.[0]?.cloudPath, { timeout: 20000 }).toBe(true)
+  const output = (await taskDocument()).outputs[0]
+  const downloaded = await storage.download(output.cloudPath); if (downloaded.error || await downloaded.data.text() !== 'DayWeave v2 private output') throw new Error('Uploaded bytes differ')
+  if (!(await clients[1].storage.from('task-outputs').download(output.cloudPath)).error) throw new Error('Cross-account download accepted')
+  if (!(await anonymous.storage.from('task-outputs').download(output.cloudPath)).error) throw new Error('Anonymous download accepted')
+  const intrusion = await clients[1].storage.from('task-outputs').upload(output.cloudPath.replace(/[^/]+$/, 'forbidden.bin'), new Blob(['blocked']))
+  if (!intrusion.error) throw new Error('Cross-account upload accepted')
+  await pages[1].setViewportSize({ width: 390, height: 844 })
+  await expect(pages[1].getByTestId('output-row')).toContainText('云端可查', { timeout: 15000 })
+  const phoneDownload = pages[1].waitForEvent('download'); await pages[1].getByRole('button', { name: '下载', exact: true }).click()
+  const result = await phoneDownload; if ((await readFile(await result.path(), 'utf8')) !== 'DayWeave v2 private output') throw new Error('Phone download bytes differ')
+  await pages[0].getByRole('button', { name: '改为仅本机', exact: true }).click()
+  await pages[0].getByRole('group', { name: '确认文件存储方式' }).getByRole('button', { name: '确认', exact: true }).click()
+  await expect.poll(async () => (await taskDocument()).outputs?.[0]?.cloudPath).toBeUndefined()
+  const remaining = await storage.list(output.cloudPath.split('/').slice(0, -1).join('/'))
+  if (remaining.error || remaining.data.length) throw new Error('Cloud object remains after return-to-local')
+  if (!(await storage.download(output.cloudPath, { cacheNonce: crypto.randomUUID() })).error) throw new Error('Fresh cloud request still succeeds after return-to-local')
+  await expect(pages[1].getByTestId('output-row')).toContainText('仅在本机', { timeout: 15000 })
+  console.log('PASS: local-only default, pre-upload confirmation, metadata-only sync, private cloud upload, phone download byte equality, cross-account/anonymous deny, cloud removal preserving device copy')
 } catch (error) {
   console.error(error.message); process.exitCode = 1
   if (debugPage) console.log('Sync diagnostics', await debugPage.evaluate(async () => {
@@ -63,5 +95,11 @@ try {
   }))
 } finally {
   if (browser) await browser.close()
+  // Remove only this run's disposable account objects via Storage API before users are deleted.
+  for (let i = 0; i < clients.length; i++) {
+    const storage = clients[i].storage.from('task-outputs')
+    async function paths(prefix) { const { data, error } = await storage.list(prefix); if (error) return []; const found = []; for (const file of data) { const path = prefix + '/' + file.name; if (file.id) found.push(path); else found.push(...await paths(path)) } return found }
+    const objects = await paths(accounts[i].id); if (objects.length) { const { error } = await storage.remove(objects); if (error) console.error('Disposable object cleanup failed:', error.message) }
+  }
   await Promise.all(clients.map(c => c.auth.signOut()))
 }

@@ -2,12 +2,17 @@
 
 面向个人与 AI Agent 并行工作的轻量任务应用。Windows 客户端使用 Tauri 2 + 系统 WebView2，界面由 React 与 TypeScript 编写，同一套界面可运行于网页，适配手机屏幕。
 
-![桌面与手机设计方案](docs/design/dayweave-concept.png)
+![Windows 新版设计](docs/design/dayweave-desktop-v2.png)
 
-## 首版功能
+[手机设计图](docs/design/dayweave-mobile-v2.png) · [设计提示词](docs/design/imagegen-v2-prompts.md)
+
+## v0.2 功能
 
 - 按日期创建任务、提前安排其他日期；周视图、月历与历史日期跳转。
 - 待办任务 / 进行中 / 已结束；状态分组和每个任务可展开或折叠。
+- 拖动任务左侧把手，在状态分组之间移动或调整顺序；手机支持触控拖动，键盘支持空格提起、方向键选状态、回车放下。
+- 精简任务视图；Windows 客户端缩为小窗口，可置顶、最小化，并恢复完整窗口。
+- 每项任务可关联产出文档或项目文件夹，已结束任务也可继续添加。文件默认只保存在本机，逐项确认后才上传私有云端副本。
 - 子步骤、备注、项目标签、优先级、今日重点、关联链接。
 - 执行者可填自己、Codex、Claude 等；Agent 视图与等待反馈标记。
 - IndexedDB 本机保存，Supabase Auth + Postgres + Realtime 账号同步。
@@ -39,7 +44,16 @@ npm run desktop:build
 
 Windows 安装包输出到 `src-tauri/target/release/bundle/nsis/`；`src-tauri/target/release/dayweave.exe` 是可直接运行的程序。安装包为开发首版，尚未配置商业代码签名。
 
-端到端测试默认使用 Playwright Chromium。本机可设 `$env:PLAYWRIGHT_CHANNEL='msedge'` 使用 Edge。测试运行生产构建，覆盖离线刷新、持久化、子步骤、日期、状态、删除恢复和两种屏幕布局。
+端到端测试默认使用 Playwright Chromium。本机可设 `$env:PLAYWRIGHT_CHANNEL='msedge'` 使用 Edge。测试运行生产构建，覆盖离线刷新、持久化、子步骤、日期、拖拽、精简视图、本机附件、删除恢复和两种屏幕布局。原生附件逻辑另可在 `src-tauri` 运行 `cargo test --lib` 检查。
+
+## 产出文件如何保存
+
+- **Windows 关联**：保留原文件或文件夹的位置，只记录本机关联，不复制、不自动上传；原文件移动后可重新关联。文件名和类型随任务同步，完整本机路径不会上传。
+- **网页本机文件**：文件内容保存在当前浏览器的 IndexedDB，单个最多 25 MB；清理网站数据会清除这些副本。浏览器不直接访问 Windows 的项目文件夹。
+- **手机查阅**：登录同一账号，在原电脑点击该附件的「上传到云端」并确认，手机同步后即可下载。云空间为私有，按账号隔离。需要先发布网页或以后安装 Android 客户端，才能跨设备打开应用。
+- **文件夹上传**：Windows 将所选文件夹内的普通文件（含隐藏文件和子目录）打包为 ZIP；单次最多 25 MB、2000 项，不跟随符号链接。上传是当时内容的快照，本机后续修改不会自动重传。
+- **改回仅本机**：先保留当前设备的副本，再删除云端对象；已经下载到其他设备的副本仍在那些设备上。移除任务中的关联不会删除本机原文件。
+- **备份范围**：JSON 备份包含任务和附件名称等元数据，不包含文件内容或本机路径。文档和项目文件夹请另行备份。
 
 ## 云端初始化
 
@@ -61,4 +75,4 @@ CI 检查类型、单元测试和桌面 / 手机浏览器交互。手动运行 W
 - 循环任务、系统提醒、托盘常驻、全局快捷捕获、Agent Webhook 与自动更新列入后续规划。
 - 本机任务默认保存在应用的 WebView 数据目录或浏览器 IndexedDB；应定期导出备份。
 
-更多产品建议、阶段取舍和验收说明见 [产品设计与路线](docs/product-plan.md) 与 [验证记录](docs/verification.md)。
+更多产品建议、阶段取舍和验收说明见 [产品设计与路线](docs/product-plan.md)、[v0.2 验证记录](docs/verification-v2.md) 与 [v0.1 验证记录](docs/verification.md)。

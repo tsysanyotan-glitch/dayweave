@@ -1,10 +1,11 @@
 export type Status = 'todo' | 'doing' | 'done'
 export type Priority = 'high' | 'medium' | 'low'
 export interface Step { id: string; title: string; done: boolean }
+export interface Output { id: string; name: string; kind: 'file' | 'folder'; size?: number; cloudPath?: string }
 export interface Task {
   id: string; title: string; note: string; date: string; status: Status
   priority: Priority; assignee: string; project: string; link: string
-  waiting: boolean; starred: boolean; steps: Step[]
+  waiting: boolean; starred: boolean; steps: Step[]; outputs: Output[]; order?: number
   createdAt: string; updatedAt: string; deletedAt: string | null
 }
 export interface RemoteRow {
@@ -30,7 +31,7 @@ export function validDate(value: unknown): value is string {
 }
 export function newTask(date = dateKey()): Task {
   const now = new Date().toISOString()
-  return { id: uuid(), title: '', note: '', date, status: 'todo', priority: 'medium', assignee: '自己', project: '', link: '', waiting: false, starred: false, steps: [], createdAt: now, updatedAt: now, deletedAt: null }
+  return { id: uuid(), title: '', note: '', date, status: 'todo', priority: 'medium', assignee: '自己', project: '', link: '', waiting: false, starred: false, steps: [], outputs: [], createdAt: now, updatedAt: now, deletedAt: null }
 }
 export function safeLink(value: string): string | null {
   if (!value) return null
@@ -51,8 +52,22 @@ export function validateTask(value: unknown): Task {
   if (new Set(t.steps.map(s => s.id)).size !== t.steps.length) throw new Error('子步骤 ID 重复')
   if (![t.createdAt, t.updatedAt].every(x => typeof x === 'string' && !Number.isNaN(Date.parse(x))) || (t.deletedAt !== null && (typeof t.deletedAt !== 'string' || Number.isNaN(Date.parse(t.deletedAt))))) throw new Error('任务时间无效')
   if (t.link && !safeLink(t.link)) throw new Error('关联链接需要以 https:// 或 http:// 开头')
-  return { ...t, title: t.title.trim(), steps: t.steps.map(s => ({ ...s, title: s.title.trim() })) }
+  if (t.outputs !== undefined && !Array.isArray(t.outputs)) throw new Error('任务产出格式无效')
+  const outputs = (t.outputs ?? []).map(validateOutput)
+  if (outputs.length > 100 || new Set(outputs.map(o => o.id)).size !== outputs.length) throw new Error('任务产出最多 100 项，且不能重复')
+  if (t.order !== undefined && (typeof t.order !== 'number' || !Number.isFinite(t.order) || Math.abs(t.order) > 1e16)) throw new Error('任务顺序无效')
+  // Whitelist synchronized fields. Native paths and browser file bytes never enter tasks.
+  return { id: t.id, title: t.title.trim(), note: t.note, date: t.date, status: t.status, priority: t.priority, assignee: t.assignee, project: t.project, link: t.link, waiting: t.waiting, starred: t.starred, steps: t.steps.map(s => ({ id: s.id, title: s.title.trim(), done: s.done })), outputs, ...(t.order === undefined ? {} : { order: t.order }), createdAt: t.createdAt, updatedAt: t.updatedAt, deletedAt: t.deletedAt }
 }
+export function validateOutput(value: unknown): Output {
+  const o = value as Output
+  if (!o || typeof o.id !== 'string' || !/^[0-9a-f-]{36}$/i.test(o.id) || typeof o.name !== 'string' || !o.name.trim() || o.name.length > 300 || !['file', 'folder'].includes(o.kind)) throw new Error('任务产出格式无效')
+  if (o.size !== undefined && (!Number.isSafeInteger(o.size) || o.size < 0)) throw new Error('文件大小无效')
+  if (o.cloudPath !== undefined && (typeof o.cloudPath !== 'string' || !/^[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/[0-9a-f-]{36}\.(bin|zip)$/i.test(o.cloudPath))) throw new Error('云端文件位置无效')
+  if (o.cloudPath && o.cloudPath.split('/')[2] !== o.id) throw new Error('云端文件标识不匹配')
+  return { id: o.id, name: o.name.trim(), kind: o.kind, ...(o.size === undefined ? {} : { size: o.size }), ...(o.cloudPath ? { cloudPath: o.cloudPath } : {}) }
+}
+export const taskOrder = (t: Task) => t.order ?? (t.starred ? -1e15 : 0) + ({ high: 0, medium: 1e14, low: 2e14 }[t.priority]) + Date.parse(t.createdAt)
 export function fromRemote(scope: string, row: RemoteRow): LocalRecord {
   const task = validateTask(row.document)
   if (row.id !== task.id || row.user_id !== scope || !Number.isSafeInteger(row.revision) || row.revision < 1) throw new Error('云端任务数据无效')

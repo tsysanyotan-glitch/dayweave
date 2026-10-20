@@ -6,7 +6,7 @@ let accessToken: string | null = null
 let network = new AbortController()
 window.addEventListener('offline', () => network.abort())
 window.addEventListener('online', () => { network = new AbortController() })
-const transport = { fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, { ...init, signal: AbortSignal.any([network.signal, AbortSignal.timeout(12000), ...(init?.signal ? [init.signal] : [])]) }) }
+const transport = { fetch: (input: RequestInfo | URL, init?: RequestInit) => fetch(input, { ...init, signal: AbortSignal.any([network.signal, AbortSignal.timeout(String(input instanceof Request ? input.url : input).includes('/storage/v1/') ? 120000 : 12000), ...(init?.signal ? [init.signal] : [])]) }) }
 export const cloud = url && key ? createClient(url, key, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
   global: transport,

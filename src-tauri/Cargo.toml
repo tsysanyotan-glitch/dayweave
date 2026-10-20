@@ -1,6 +1,6 @@
 [package]
 name = "dayweave"
-version = "0.1.0"
+version = "0.2.0"
 description = "日序 DayWeave"
 authors = ["DayWeave"]
 edition = "2021"
@@ -17,6 +17,10 @@ tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+base64 = "=0.22.1"
+zip = { version = "=6.0.0", default-features = false }
 
 [profile.release]
 opt-level = "s"

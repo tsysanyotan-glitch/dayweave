@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from 'react'
 import { cloud, dataCloud } from './cloud'
 import { loadRecords, saveRecords } from './db'
-import { acknowledge, fromRemote, mergeRemote, newTask, readBackup, uuid, validateTask, type LocalRecord, type RemoteRow, type Task } from './model'
+import { copyLocalOutputScope } from './outputs'
+import { acknowledge, fromRemote, mergeRemote, newTask, readBackup, uuid, validateTask, taskOrder, type LocalRecord, type RemoteRow, type Task, type Status } from './model'
 
 interface Snapshot {
   ready: boolean; scope: string; email: string | null; records: LocalRecord[]
@@ -47,8 +48,8 @@ export async function saveTask(task: Task) {
   }, scope)
   scheduleSync()
 }
-export async function patchTask(id: string, transform: (task: Task) => Task) {
-  const scope = snapshot.scope
+export async function patchTask(id: string, transform: (task: Task) => Task, scope = snapshot.scope) {
+  if (snapshot.scope !== scope) throw new Error('账号已切换，请回到原账号后继续')
   await commit(records => {
     const record = records.find(r => r.task.id === id)
     if (!record) return []
@@ -70,7 +71,33 @@ export async function copyGuestTasks() {
   // Stable IDs make repeated imports harmless, including after interrupted uploads.
   const existing = new Set(snapshot.records.map(r => r.task.id))
   const records = guests.filter(r => !existing.has(r.task.id)).map(r => ({ scope, task: r.task, serverRevision: 0, dirty: true, mutationId: uuid() }))
+  await copyLocalOutputScope('guest', scope, records.flatMap(r => (r.task.outputs ?? []).map(o => o.id)))
   await commit(records, scope); scheduleSync(); return records.length
+}
+export async function moveTask(id: string, status: Status, beforeId?: string, peerIds?: string[]) {
+  const scope = snapshot.scope
+  await commit(records => {
+    const current = records.find(r => r.task.id === id)
+    if (!current || current.task.deletedAt) return []
+    const peers = records.filter(r => r.task.id !== id && !r.task.deletedAt && r.task.status === status && (!peerIds || peerIds.includes(r.task.id))).map(r => r.task).sort((a,b) => taskOrder(a) - taskOrder(b))
+    const index = beforeId ? peers.findIndex(t => t.id === beforeId) : peers.length
+    const target = index < 0 ? peers.length : index
+    const left = target > 0 ? taskOrder(peers[target - 1]) : undefined
+    const right = target < peers.length ? taskOrder(peers[target]) : undefined
+    const order = left === undefined ? (right ?? 0) - 1024 : right === undefined ? left + 1024 : (left + right) / 2
+    const now = new Date().toISOString()
+    let moved = [{ ...current.task, status, order, waiting: status === 'done' ? false : current.task.waiting }]
+    if ((left !== undefined && order <= left) || (right !== undefined && order >= right)) {
+      const reordered = [...peers]; reordered.splice(target, 0, moved[0]); moved = reordered.map((task, index) => ({ ...task, order: index * 1024 }))
+    }
+    return moved.map(task => ({ ...records.find(r => r.task.id === task.id)!, task: validateTask({ ...task, updatedAt: now }), dirty: true, mutationId: uuid() }))
+  }, scope)
+  scheduleSync()
+}
+export async function clearCloudReference(path: string, scope: string) {
+  if (snapshot.scope !== scope) throw new Error('账号已切换，请回到原账号后继续')
+  await commit(records => records.filter(r => (r.task.outputs ?? []).some(o => o.cloudPath === path)).map(record => ({ ...record, task: validateTask({ ...record.task, outputs: record.task.outputs.map(o => o.cloudPath === path ? { ...o, cloudPath: undefined } : o), updatedAt: new Date().toISOString() }), dirty: true, mutationId: uuid() })), scope)
+  scheduleSync()
 }
 export async function resolveConflict(id: string, choice: 'local' | 'remote' | 'both') {
   const scope = snapshot.scope
