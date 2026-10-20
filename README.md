@@ -8,10 +8,12 @@
 
 任务类型补充设计：[电脑](docs/design/dayweave-task-types-desktop.png) · [手机](docs/design/dayweave-task-types-mobile.png) · [提示词](docs/design/task-types-prompts.md)。以上设计图均在对应功能编码前生成。
 
-## v0.3.0 功能
+## v0.4.0 功能
 
 - 按日期创建任务、提前安排其他日期；周视图、月历与历史日期跳转。
 - 待办任务 / 进行中 / 已结束；状态分组和每个任务可展开或折叠。
+- 过去日期仍在进行中的任务自动顺延到今天，保留原任务、步骤与产出关联，跨零点、唤醒和隔天重新打开都会处理。离线时先保存本机，联网后同步；待办、已结束、未来和待处理冲突保持原样。
+- 个人任务 API：查询、新建、局部修改、移入回收站；设置中创建只读 / 读写密钥、指定有效期并撤销。包含 [中文接口文档与示例](docs/api.md) 和 [OpenAPI 3.1](docs/api.openapi.json)，支持其他服务接入自己的账号；密钥摘要存储、限流和原子版本检查。
 - 区分「计划任务」和「零碎问题」：前者用绿色清单图标，后者用琥珀色扳手、文字标签和浅色底；精简窗口仍显示不同图标。类型独立于状态和优先级。
 - 按任务类型筛选，在零碎问题筛选下创建任务时默认选中该类型；编辑时可随时转换。旧任务默认归为计划任务。
 - 拖动任务左侧把手，在状态分组之间移动或调整顺序；手机支持触控拖动，键盘支持空格提起、方向键选状态、回车放下。
@@ -72,6 +74,8 @@ Windows 安装包输出到 `src-tauri/target/release/bundle/nsis/`；`src-tauri/
 
 `tests/rls.sql` 可在开发项目用 postgres 权限执行，测试事务会回滚。`scripts/verify-cloud.mjs` 是显式运行的真实云端集成检查，只可使用可清理的开发测试账号；账号文件放在忽略的 `artifacts/` 目录，不会上传。
 
+API 数据库迁移同样包含在 `supabase/migrations/`，函数入口是 `supabase/functions/dayweave-api/index.ts`，依赖共享任务验证与 OpenAPI JSON。现有项目的 API 已部署；新项目按 [接口文档](docs/api.md) 部署。`tests/api-rls.sql` 用回滚事务检查密钥隔离、RPC 权限、撤销和限流。
+
 ## GitHub Actions
 
 CI 检查类型、单元测试和桌面 / 手机浏览器交互。手动运行 Windows 工作流可生成安装包；在仓库 Variables 配置 `SUPABASE_URL` 与 `SUPABASE_PUBLISHABLE_KEY` 才会包含该项目的云连接，未配置时为本机模式。锁定的 npm 与 Rust 依赖均随源码提交。
@@ -85,4 +89,4 @@ CI 检查类型、单元测试和桌面 / 手机浏览器交互。手动运行 W
 - 本机任务默认保存在应用的 WebView 数据目录或浏览器 IndexedDB；应定期导出备份。
 - 建议各端使用同一新版客户端；早于 v0.2.1 的版本不识别任务类型，混用旧版编辑可能让该任务回到默认类型。
 
-更多产品建议、阶段取舍和验收说明见 [v0.3 验证记录](docs/verification-v3.md)、[产品设计与路线](docs/product-plan.md)、[滚动条调整验证](docs/verification-scrollbars.md)、[窗口顶栏验证](docs/verification-titlebar.md)、[任务类型验证](docs/verification-task-types.md)、[v0.2 验证记录](docs/verification-v2.md) 与 [v0.1 验证记录](docs/verification.md)。
+更多产品建议、阶段取舍和验收说明见 [v0.4 验证记录](docs/verification-v4.md)、[v0.3 验证记录](docs/verification-v3.md)、[产品设计与路线](docs/product-plan.md)、[滚动条调整验证](docs/verification-scrollbars.md)、[窗口顶栏验证](docs/verification-titlebar.md)、[任务类型验证](docs/verification-task-types.md)、[v0.2 验证记录](docs/verification-v2.md) 与 [v0.1 验证记录](docs/verification.md)。

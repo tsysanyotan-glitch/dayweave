@@ -2,13 +2,13 @@ import { useSyncExternalStore } from 'react'
 import { cloud, dataCloud } from './cloud'
 import { loadRecords, saveRecords } from './db'
 import { copyLocalOutputScope } from './outputs'
-import { acknowledge, fromRemote, mergeRemote, newTask, readBackup, uuid, validateTask, taskOrder, type LocalRecord, type RemoteRow, type Task, type Status } from './model'
+import { acknowledge, carryForward, dateKey, fromRemote, mergeRemote, newTask, readBackup, uuid, validateTask, taskOrder, type LocalRecord, type RemoteRow, type Task, type Status } from './model'
 
 interface Snapshot {
   ready: boolean; scope: string; email: string | null; records: LocalRecord[]
-  syncing: boolean; online: boolean; error: string; lastSync: string | null
+  syncing: boolean; online: boolean; error: string; lastSync: string | null; today: string
 }
-let snapshot: Snapshot = { ready: false, scope: 'guest', email: null, records: [], syncing: false, online: navigator.onLine, error: '', lastSync: null }
+let snapshot: Snapshot = { ready: false, scope: 'guest', email: null, records: [], syncing: false, online: navigator.onLine, error: '', lastSync: null, today: dateKey() }
 const listeners = new Set<() => void>()
 const emit = (patch: Partial<Snapshot>) => { snapshot = { ...snapshot, ...patch }; listeners.forEach(fn => fn()) }
 export const useTasks = () => useSyncExternalStore(fn => { listeners.add(fn); return () => { listeners.delete(fn) } }, () => snapshot)
@@ -24,11 +24,17 @@ function commit(update: LocalRecord[] | ((current: LocalRecord[]) => LocalRecord
   const work = storageQueue.then(async () => {
     if (snapshot.scope !== scope) return
     const records = typeof update === 'function' ? update(snapshot.records) : update
-    await saveRecords(records)
-    if (snapshot.scope !== scope) return
     const map = new Map(snapshot.records.map(r => [r.task.id, r]))
     records.forEach(r => map.set(r.task.id, r))
-    emit({ records: [...map.values()] })
+    const today = dateKey()
+    const carried = carryForward([...map.values()], today)
+    carried.forEach(r => map.set(r.task.id, r))
+    const writes = new Map(records.map(r => [r.task.id, r]))
+    carried.forEach(r => writes.set(r.task.id, r))
+    if (writes.size) await saveRecords([...writes.values()])
+    if (snapshot.scope !== scope) return
+    emit({ records: [...map.values()], today })
+    if (carried.length) scheduleSync()
   })
   storageQueue = work.catch(() => {})
   return work
@@ -127,7 +133,10 @@ async function performSync() {
         if (snapshot.scope !== scope) return
         await commit(records => {
           const current = records.find(r => r.task.id === sent.task.id)
-          return current ? [mergeRemote(current, fresh.data as RemoteRow)] : []
+          if (!current) return []
+          const merged = mergeRemote(current, fresh.data as RemoteRow)
+          if (merged.dirty && !merged.conflict) scheduleSync()
+          return [merged]
         }, scope)
         continue
       }
@@ -167,13 +176,23 @@ async function switchAccount(user: { id: string; email?: string } | null) {
   if (channel && dataCloud) { void dataCloud.removeChannel(channel); channel = null }
   const records = await loadRecords(scope)
   if (snapshot.scope !== scope) return
-  emit({ ready: true, records })
+  // Catch up before showing this account, including launches after days offline.
+  await commit(records, scope)
+  emit({ ready: true })
   if (dataCloud && user) {
     channel = dataCloud.channel('tasks-' + scope).on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: 'user_id=eq.' + scope }, scheduleSync).subscribe(status => { if (status === 'SUBSCRIBED') scheduleSync() })
     scheduleSync()
   }
 }
 let started = false
+function checkDay() {
+  if (snapshot.ready && snapshot.today !== dateKey()) void commit([], snapshot.scope)
+    .catch(error => emit({ error: '任务顺延暂未保存：' + String(error) }))
+}
+function watchMidnight() {
+  const next = new Date(); next.setHours(24, 0, 0, 50)
+  setTimeout(() => { checkDay(); watchMidnight() }, Math.max(50, next.getTime() - Date.now()))
+}
 export function initialize() {
   if (started) return
   started = true
@@ -182,11 +201,13 @@ export function initialize() {
   }
   if (cloud) cloud.auth.onAuthStateChange((_event, session) => { apply(session?.user ?? null) })
   else apply(null)
-  window.addEventListener('online', () => { emit({ online: true }); scheduleSync() })
+  window.addEventListener('online', () => { emit({ online: true }); checkDay(); scheduleSync() })
   window.addEventListener('offline', () => emit({ online: false }))
-  window.addEventListener('focus', scheduleSync)
+  window.addEventListener('focus', () => { checkDay(); scheduleSync() })
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { checkDay(); scheduleSync() } })
+  watchMidnight()
   // Low-frequency fallback also covers missed Realtime events after waking the computer.
-  setInterval(() => { if (document.visibilityState === 'visible') scheduleSync() }, 60000)
+  setInterval(() => { if (document.visibilityState === 'visible') { checkDay(); scheduleSync() } }, 60000)
 }
 export function exampleTasks(date: string): Task[] {
   return [

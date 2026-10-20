@@ -3,6 +3,8 @@ import { ArrowDownToLine, ArrowUpFromLine, Check, CheckCheck, ChevronDown, Chevr
 import { cloud } from './cloud'
 import { EmailOtpForm } from './EmailOtpForm'
 import { AssigneePicker } from './AssigneePicker'
+import { ApiKeys } from './ApiKeys'
+import './api-keys.css'
 import { OutputPanel } from './OutputPanel'
 import { KindFilter, KindIcon, KindPicker } from './TaskKind'
 import { useTaskDrag } from './useTaskDrag'
@@ -111,7 +113,8 @@ function Preferences({ close, act, showTrash }: { close: () => void; act: (p: Pr
       {!cloud ? <p className="notice">当前为本机模式。配置 Supabase 后即可启用云同步。</p> : state.email ? <div className="account-box"><strong>{state.email}</strong><p>{state.syncing ? '正在同步…' : state.lastSync ? '最近同步 ' + new Date(state.lastSync).toLocaleTimeString('zh-CN') : '等待首次同步'}</p><div className="row-actions"><button onClick={() => act(syncNow())}>立即同步</button><button onClick={() => act(copyGuestTasks().then(count => setMessage(`已复制 ${count} 个本机任务到当前账号；本机原件保留。`)))}>复制离线任务到账号</button><button onClick={() => act(cloud!.auth.signOut().then(({ error }) => { if (error) throw error }), '已退出，已切换到独立的本机任务空间')}>退出登录</button></div></div> : <EmailOtpForm />}
     </section>
     <section><div className="settings-title"><Folder size={18} /><h3>数据由你保管</h3></div><p className="muted">备份包含当前空间的全部任务及回收站，不包含登录信息。导入会添加副本。</p><div className="settings-actions"><button className="button secondary" onClick={() => act(exportData())}><ArrowDownToLine size={15} />导出备份</button><button className="button secondary" onClick={() => file.current?.click()}><ArrowUpFromLine size={15} />导入备份</button><button className="button secondary" onClick={showTrash}><Trash2 size={15} />回收站</button></div><input ref={file} type="file" accept=".json,application/json" hidden onChange={e => { const selected = e.target.files?.[0]; if (selected) act((async () => { if (selected.size > 20 * 1024 * 1024) throw new Error('备份文件不能超过 20 MB'); const count = await importTasks(await selected.text()); setMessage(`已添加 ${count} 个任务副本。`) })()); e.target.value = '' }} /></section>
-    <section className="about"><Sprout size={21} /><div><strong>日序 <span>DAYWEAVE</span></strong><p>v0.3.0 · 给并行任务，留一点秩序。</p><small>Windows 客户端 · 响应式网页 · 离线优先</small></div></section>
+    {state.email && cloud && <ApiKeys key={state.scope} scope={state.scope} />}
+    <section className="about"><Sprout size={21} /><div><strong>日序 <span>DAYWEAVE</span></strong><p>v0.4.0 · 给并行任务，留一点秩序。</p><small>Windows 客户端 · 响应式网页 · 离线优先</small></div></section>
     {(message || state.error) && <p className="notice" role="status">{message || state.error}</p>}
     </div>
   </Modal>
@@ -121,6 +124,12 @@ export default function App() {
   const state = useTasks()
   const [view, setView] = useState<View>('day')
   const [date, setDate] = useState(dateKey())
+  const previousToday = useRef(state.today)
+  useEffect(() => {
+    const previous = previousToday.current
+    previousToday.current = state.today
+    if (previous !== state.today) setDate(selected => selected === previous ? state.today : selected)
+  }, [state.today])
   const [search, setSearch] = useState('')
   const [assignee, setAssignee] = useState('all')
   const [kindFilter, setKindFilter] = useState<TaskKind | 'all'>(() => { const saved = localStorage.getItem('dayweave-kind-filter'); return saved === 'planned' || saved === 'issue' ? saved : 'all' })

@@ -1,6 +1,6 @@
 [package]
 name = "dayweave"
-version = "0.3.0"
+version = "0.4.0"
 description = "日序 DayWeave"
 authors = ["DayWeave"]
 edition = "2021"

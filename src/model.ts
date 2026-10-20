@@ -72,6 +72,16 @@ export function validateOutput(value: unknown): Output {
   return { id: o.id, name: o.name.trim(), kind: o.kind, ...(o.size === undefined ? {} : { size: o.size }), ...(o.cloudPath ? { cloudPath: o.cloudPath } : {}) }
 }
 export const taskOrder = (t: Task) => t.order ?? (t.starred ? -1e15 : 0) + ({ high: 0, medium: 1e14, low: 2e14 }[t.priority]) + Date.parse(t.createdAt)
+// Move the original record, preserving attachment IDs and all work already done.
+export function carryForward(records: LocalRecord[], today = dateKey(), now = new Date().toISOString()): LocalRecord[] {
+  return records.filter(r => !r.conflict && !r.task.deletedAt && r.task.status === 'doing' && r.task.date < today)
+    .map(r => ({ ...r, task: { ...r.task, date: today, updatedAt: now }, dirty: true, mutationId: uuid() }))
+}
+function sameWork(a: Task, b: Task) {
+  const { date: _ad, updatedAt: _au, ...left } = validateTask(a)
+  const { date: _bd, updatedAt: _bu, ...right } = validateTask(b)
+  return JSON.stringify(left) === JSON.stringify(right)
+}
 export function fromRemote(scope: string, row: RemoteRow): LocalRecord {
   const task = validateTask(row.document)
   if (row.id !== task.id || row.user_id !== scope || !Number.isSafeInteger(row.revision) || row.revision < 1) throw new Error('云端任务数据无效')
@@ -80,7 +90,13 @@ export function fromRemote(scope: string, row: RemoteRow): LocalRecord {
 export function mergeRemote(local: LocalRecord | undefined, row: RemoteRow): LocalRecord {
   const remote = fromRemote(row.user_id, row)
   if (!local) return remote
+  if (local.scope !== row.user_id) throw new Error('任务账号不匹配')
   if (row.revision <= local.serverRevision) return local
+  // Two devices can carry the same task forward independently. Only reconcile
+  // dates when every other field agrees; actual content edits still conflict.
+  if (local.dirty && !local.conflict && local.task.status === 'doing' && !local.task.deletedAt && sameWork(local.task, remote.task)) {
+    return remote.task.date >= local.task.date ? remote : { ...local, serverRevision: row.revision }
+  }
   if (local.dirty) return { ...local, conflict: row }
   return remote
 }
