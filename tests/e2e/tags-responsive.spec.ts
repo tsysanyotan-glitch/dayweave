@@ -8,7 +8,11 @@ test('custom executor tags can be created, reused, filtered and edited without a
   await page.getByLabel('执行者', { exact: true }).fill('codex-研究')
   await expect(page.getByText('保存任务时创建「codex-研究」标签', { exact: true })).toBeVisible()
   await page.getByRole('button', { name: '保存任务', exact: true }).click()
+  // Reload only after the IndexedDB transaction and the editor's save complete.
+  await expect(page.getByRole('dialog')).not.toBeVisible()
+  await expect(page.getByTestId('task-row')).toContainText('codex-研究')
   await page.reload()
+  await expect(page.getByTestId('task-row')).toContainText('codex-研究')
   await page.locator('.new-task').click()
   await page.getByLabel('任务名称').fill('复用执行者任务')
   await page.getByRole('button', { name: 'codex-研究', exact: true }).click()
