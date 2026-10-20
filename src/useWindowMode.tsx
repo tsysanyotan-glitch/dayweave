@@ -1,41 +1,71 @@
 import { useEffect, useRef, useState } from 'react'
 import { Copy, Expand, Minimize2, Minus, Pin, PinOff, Square, X } from 'lucide-react'
 import { native } from './outputs'
+const compactSizeKey = 'dayweave-compact-size'
+function savedCompactSize() {
+  try {
+    const size = JSON.parse(localStorage.getItem(compactSizeKey) || 'null')
+    if (Number.isFinite(size?.width) && Number.isFinite(size?.height)) return { width: Math.max(280, Math.min(size.width, 4096)), height: Math.max(260, Math.min(size.height, 4096)) }
+  } catch { /* Fall back to the initial compact dimensions. */ }
+  return { width: 380, height: 620 }
+}
 export function useWindowMode(report: (message: string) => void) {
   const [compact, setCompact] = useState(() => localStorage.getItem('dayweave-compact') === 'true')
   const [pinned, setPinned] = useState(() => localStorage.getItem('dayweave-pinned') === 'true')
   const full = useRef<{ width: number; height: number; x: number; y: number; maximized: boolean } | null>(null)
   const [busy, setBusy] = useState(false)
   const [maximized, setMaximized] = useState(false)
+  const compactRef = useRef(compact)
+  const changing = useRef(false)
+  const saveCompactSize = async () => {
+    const win = (await import('@tauri-apps/api/window')).getCurrentWindow()
+    if (await win.isMaximized() || await win.isMinimized()) return
+    const size = (await win.innerSize()).toLogical(await win.scaleFactor())
+    if (size.width >= 279 && size.height >= 259) localStorage.setItem(compactSizeKey, JSON.stringify({ width: Math.round(size.width), height: Math.round(size.height) }))
+  }
   const resize = async (small: boolean, remember: boolean) => {
     if (!native) return
-    const { getCurrentWindow, LogicalSize, PhysicalSize, PhysicalPosition } = await import('@tauri-apps/api/window')
+    changing.current = true
+    try {
+    const { getCurrentWindow, currentMonitor, LogicalSize, PhysicalSize, PhysicalPosition } = await import('@tauri-apps/api/window')
     const win = getCurrentWindow()
     if (small) {
       const wasMaximized = await win.isMaximized()
       if (wasMaximized) await win.unmaximize()
       if (remember) { const size = await win.innerSize(); const position = await win.outerPosition(); full.current = { width: size.width, height: size.height, x: position.x, y: position.y, maximized: wasMaximized } }
-      await win.setMinSize(new LogicalSize(330, 360)); await win.setSize(new LogicalSize(380, 620))
+      const size = savedCompactSize()
+      const monitor = await currentMonitor()
+      const available = monitor?.workArea.size.toLogical(monitor.scaleFactor)
+      await win.setMinSize(new LogicalSize(280, 260))
+      await win.setSize(new LogicalSize(Math.min(size.width, available?.width ?? size.width), Math.min(size.height, available?.height ?? size.height)))
     } else {
+      if (remember && compactRef.current) await saveCompactSize()
       if (await win.isMaximized()) await win.unmaximize()
-      await win.setMinSize(new LogicalSize(420, 600))
+      await win.setMinSize(new LogicalSize(320, 360))
       if (full.current) { await win.setSize(new PhysicalSize(full.current.width, full.current.height)); await win.setPosition(new PhysicalPosition(full.current.x, full.current.y)); if (full.current.maximized) await win.maximize() }
       else { await win.setSize(new LogicalSize(1360, 900)); await win.center() }
     }
+    compactRef.current = small
+    } finally { changing.current = false }
   }
   useEffect(() => { if (native) { void resize(compact, false).catch(e => report(String(e))); void import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow().setAlwaysOnTop(pinned)).catch(e => report(String(e))) } }, [])
   useEffect(() => {
     if (!native) return
     let disposed = false
     let unlisten: (() => void) | undefined
+    let timer: ReturnType<typeof setTimeout> | undefined
     void import('@tauri-apps/api/window').then(async ({ getCurrentWindow }) => {
       const win = getCurrentWindow()
       const update = async () => { const value = await win.isMaximized(); if (!disposed) setMaximized(value) }
       await update()
-      const release = await win.onResized(() => { void update().catch(e => report(String(e))) })
+      const release = await win.onResized(() => {
+        void update().catch(e => report(String(e)))
+        clearTimeout(timer)
+        if (compactRef.current && !changing.current) timer = setTimeout(() => { if (!disposed && compactRef.current && !changing.current) void saveCompactSize().catch(e => report(String(e))) }, 180)
+      })
       if (disposed) release(); else unlisten = release
     }).catch(e => report(String(e)))
-    return () => { disposed = true; unlisten?.() }
+    return () => { disposed = true; clearTimeout(timer); unlisten?.() }
   }, [])
   const toggle = async () => {
     if (busy) return; setBusy(true)

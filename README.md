@@ -8,7 +8,7 @@
 
 任务类型补充设计：[电脑](docs/design/dayweave-task-types-desktop.png) · [手机](docs/design/dayweave-task-types-mobile.png) · [提示词](docs/design/task-types-prompts.md)。以上设计图均在对应功能编码前生成。
 
-## v0.2.3 功能
+## v0.3.0 功能
 
 - 按日期创建任务、提前安排其他日期；周视图、月历与历史日期跳转。
 - 待办任务 / 进行中 / 已结束；状态分组和每个任务可展开或折叠。
@@ -17,14 +17,17 @@
 - 拖动任务左侧把手，在状态分组之间移动或调整顺序；手机支持触控拖动，键盘支持空格提起、方向键选状态、回车放下。
 - 主页面、设置和任务弹窗隐藏可见滚动条，保留滚轮、触控板、触屏和键盘滚动。
 - Windows 去掉系统标题栏，窗口按钮融入应用右上角；拖动顶部空白区域移动窗口，双击最大化或还原，滚动时窗口按钮仍可用。
-- 精简任务视图；Windows 客户端缩为小窗口，可置顶、最小化，并恢复完整窗口。
+- Windows 精简窗口可拖动边缘自由调节，最小 280 × 260 逻辑像素，记住自选尺寸；完整窗口最小 320 × 360。尺寸变小时文字换行、工具布局收紧，短窗口可按搜索图标展开筛选，任务继续滚动查看；支持置顶、最小化和恢复完整窗口。
 - 每项任务可关联产出文档或项目文件夹，已结束任务也可继续添加。文件默认只保存在本机，逐项确认后才上传私有云端副本。
 - 子步骤、备注、项目标签、优先级、今日重点、关联链接。
-- 执行者可填自己、Codex、Claude 等；Agent 视图与等待反馈标记。
+- 执行者是可自定义的标签，例如 `codex`、`设计`；创建 / 编辑任务时直接输入并保存，下次从已用标签选择。标签随任务同步，当前空间相互独立，没有独立的 Agent 协作栏目；保留等待反馈标记。
+- 邮箱 6 位验证码登录，新邮箱验证后自动建号；支持重发倒计时、错误提示和会话保存。
 - IndexedDB 本机保存，Supabase Auth + Postgres + Realtime 账号同步。
 - 版本冲突保留双方内容，可选择本机版本、云端版本或保留两个版本。
 - 软删除回收站、JSON 备份导入导出、搜索与执行者筛选。
 - 响应式布局、键盘快捷键、网页离线缓存与 PWA 安装支持。
+
+本轮功能的编码前设计：[电脑与精简窗口](docs/design/dayweave-v3-desktop.png) · [手机与验证码](docs/design/dayweave-v3-mobile.png) · [内置 ImageGen 提示词](docs/design/dayweave-v3-prompts.md)。
 
 ## 开发
 
@@ -65,7 +68,7 @@ Windows 安装包输出到 `src-tauri/target/release/bundle/nsis/`；`src-tauri/
 
 在自己新建的 Supabase 项目中按顺序执行 `supabase/migrations/` 下的迁移。`commit_task` 在登录用户权限下执行，使用版本号进行原子比较，重复请求使用 mutation ID 去重；任务删除作为文档中的墓碑同步。
 
-首次使用：打开「设置与同步」→ 注册邮箱账号 → 完成邮箱确认 → 登录。同一账号的电脑与网页会自动同步。登录前的离线任务保持独立，可用「复制离线任务到账号」手动导入；退出后回到本机任务空间。示例数据只会在主动点击体验按钮后加入本机。
+首次使用：按 [验证码配置说明](docs/email-otp-setup.md) 完成 Supabase 邮件设置，打开「设置与同步」→ 输入邮箱 → 获取并填写 6 位验证码 → 登录并同步。同一账号的电脑与网页会自动同步。登录前的离线任务保持独立，可用「复制离线任务到账号」手动导入；退出后回到本机任务空间。示例数据只会在主动点击体验按钮后加入本机。
 
 `tests/rls.sql` 可在开发项目用 postgres 权限执行，测试事务会回滚。`scripts/verify-cloud.mjs` 是显式运行的真实云端集成检查，只可使用可清理的开发测试账号；账号文件放在忽略的 `artifacts/` 目录，不会上传。
 
@@ -77,9 +80,9 @@ CI 检查类型、单元测试和桌面 / 手机浏览器交互。手动运行 W
 
 - Android 已有响应式界面与共用数据模型，原生 APK 尚未打包；后续需要 Android SDK / NDK 和真机验证。
 - 网页构建已可运行，尚未发布公网域名。网页离线功能需要 HTTPS 或 localhost，并至少联网打开一次。
-- Agent 执行者与等待反馈用于任务组织，当前不会自动调度外部 Agent，也不会读取其进程状态。
+- 执行者标签与等待反馈用于任务组织，当前不会自动调度外部 Agent，也不会读取其进程状态。
 - 循环任务、系统提醒、托盘常驻、全局快捷捕获、Agent Webhook 与自动更新列入后续规划。
 - 本机任务默认保存在应用的 WebView 数据目录或浏览器 IndexedDB；应定期导出备份。
 - 建议各端使用同一新版客户端；早于 v0.2.1 的版本不识别任务类型，混用旧版编辑可能让该任务回到默认类型。
 
-更多产品建议、阶段取舍和验收说明见 [产品设计与路线](docs/product-plan.md)、[滚动条调整验证](docs/verification-scrollbars.md)、[窗口顶栏验证](docs/verification-titlebar.md)、[任务类型验证](docs/verification-task-types.md)、[v0.2 验证记录](docs/verification-v2.md) 与 [v0.1 验证记录](docs/verification.md)。
+更多产品建议、阶段取舍和验收说明见 [v0.3 验证记录](docs/verification-v3.md)、[产品设计与路线](docs/product-plan.md)、[滚动条调整验证](docs/verification-scrollbars.md)、[窗口顶栏验证](docs/verification-titlebar.md)、[任务类型验证](docs/verification-task-types.md)、[v0.2 验证记录](docs/verification-v2.md) 与 [v0.1 验证记录](docs/verification.md)。
