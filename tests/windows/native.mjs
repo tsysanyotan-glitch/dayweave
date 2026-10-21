@@ -19,6 +19,8 @@ try {
  // This runner is only for the dedicated test profile created by launch.ps1.
  await page.evaluate(()=>{localStorage.setItem('dayweave-compact','false');localStorage.setItem('dayweave-edge-dock','false');localStorage.removeItem('dayweave-compact-size')})
  await page.reload()
+ const settings=await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('desktop_snapshot'))
+ await page.evaluate(settings=>window.__TAURI_INTERNALS__.invoke('desktop_settings',{settings:{...settings,closeToTray:false,sound:false}}),settings.settings)
  await invoke('set_size',{size:{Logical:{width:1360,height:900}}}); await invoke('center')
  await expect(page.locator('.new-task')).toBeVisible()
  await page.evaluate(()=>localStorage.removeItem('dayweave-compact-size'))
@@ -51,7 +53,7 @@ try {
  }
  await invoke('set_size',{size:{Logical:{width:330,height:420}}})
  await expect.poll(()=>page.evaluate(()=>Math.abs(JSON.parse(localStorage.getItem('dayweave-compact-size')||'{}').width-330))).toBeLessThanOrEqual(2)
- await reveal(); await page.getByRole('button',{name:'窗口置顶',exact:true}).click(); expect(await invoke('is_always_on_top')).toBe(true)
+ await reveal(); await page.getByRole('button',{name:'窗口置顶',exact:true}).click(); await expect.poll(()=>invoke('is_always_on_top')).toBe(true)
  await page.getByRole('button',{name:'恢复完整视图',exact:true}).click(); await page.getByRole('button',{name:'切换精简视图',exact:true}).click()
  await expect.poll(()=>page.evaluate(()=>Math.abs(innerWidth-330))).toBeLessThanOrEqual(2)
  await expect.poll(()=>page.evaluate(()=>Math.abs(innerHeight-420))).toBeLessThanOrEqual(2)

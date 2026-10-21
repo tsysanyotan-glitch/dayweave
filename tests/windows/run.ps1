@@ -1,4 +1,4 @@
-param([string]$Executable = 'src-tauri/target/release/dayweave.exe')
+param([string]$Executable = 'src-tauri/target/release/dayweave.exe', [switch]$RemindersOnly)
 $ErrorActionPreference = 'Stop'
 $workspace = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $exe = (Resolve-Path -LiteralPath (Join-Path $workspace $Executable)).Path
@@ -20,6 +20,7 @@ function Start-TestApp {
 }
 Push-Location $workspace
 try {
+  if(-not $RemindersOnly) {
   Start-TestApp
   rtk proxy node tests/windows/native.mjs
   if($LASTEXITCODE -ne 0) { throw 'Native interaction checks failed.' }
@@ -33,7 +34,18 @@ try {
   if($LASTEXITCODE -ne 0) { throw 'Beijing clock checks failed.' }
   $owned[-1].WaitForExit(10000) | Out-Null
   Write-Output "PASS Windows Release checks. Isolated profile: $profile"
+  }
+  Start-TestApp
+  rtk proxy node tests/windows/reminders.mjs
+  if($LASTEXITCODE -ne 0) { throw 'Reminder and tray checks failed.' }
+  $owned[-1].WaitForExit(10000) | Out-Null
+  Start-Sleep -Seconds 2
+  Start-TestApp
+  rtk proxy node tests/windows/reminders-restart.mjs
+  if($LASTEXITCODE -ne 0) { throw 'Reminder startup checks failed.' }
+  $owned[-1].WaitForExit(10000) | Out-Null
 } finally {
+  Remove-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'DayWeave Native Test' -ErrorAction SilentlyContinue
   foreach($running in $owned) { if(-not $running.HasExited) { Stop-Process -Id $running.Id } }
   $env:WEBVIEW2_USER_DATA_FOLDER = $previousProfile
   $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $previousArguments

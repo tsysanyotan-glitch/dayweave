@@ -8,6 +8,17 @@
 
 任务类型补充设计：[电脑](docs/design/dayweave-task-types-desktop.png) · [手机](docs/design/dayweave-task-types-mobile.png) · [提示词](docs/design/task-types-prompts.md)。以上设计图均在对应功能编码前生成。
 
+## v0.7.0 Windows 闹钟、截止时间与托盘
+
+- 「快捷闹钟」独立入口，紫色铃铛区分普通任务；支持直接选北京时间或 +5 / +15 / +30 / +60 分钟。
+- 普通任务可选截止时间，支持到点、提前提醒或不提醒。所有提醒时间固定为北京时间。
+- 到点弹出独立置顶窗口，可选 5 分钟后、我知道了或完成任务；主窗口隐藏到托盘时照常提醒，重新打开补上错过的提醒。
+- 贴边浮条在当前任务与时钟之间显示最近 1～5 项截止任务，数量在设置中自由选择。
+- Windows 通知区域托盘、开机自启、启动后隐藏、关闭窗口时隐藏及提醒声音开关。自启默认关闭。
+- 个人任务 API v1.2 支持闹钟与截止时间；Android 安装包继续使用原版本。
+
+编码前生成的 [设计稿](docs/design/dayweave-windows-v070-reminders.png) · [ImageGen 提示词](docs/design/windows-v070-prompts.md) · [使用、验证与交付记录](docs/windows-v070.md)。
+
 ## v0.6.1 Windows 浮条时钟
 
 贴边浮条底部新增北京时间、日期与星期，固定使用 `Asia/Shanghai`（UTC+8），不随电脑所在时区或夏令时切换。左右边竖排，上下边横排；按分钟刷新，休眠恢复或重新显示时校准。仅更新 Windows 客户端。

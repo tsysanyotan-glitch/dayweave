@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { desktop } from './platform'
 import { clampRect, dockRect, inside, nearestEdge, type Edge, type Rect } from './windowGeometry'
 interface Anchor { edge: Edge; rect: Rect; inner: { width: number; height: number }; area: Rect; scale: number }
-export function useEdgeDock(compact: boolean, ready: boolean, changing: RefObject<boolean>, report: (message: string) => void) {
+export function useEdgeDock(compact: boolean, ready: boolean, changing: RefObject<boolean>, report: (message: string) => void, reminders = 0) {
   const [enabled, setEnabled] = useState(() => localStorage.getItem('dayweave-edge-dock') !== 'false')
   const [edge, setEdge] = useState<Edge | null>(null)
   const [collapsed, setCollapsed] = useState(false)
@@ -18,7 +18,7 @@ export function useEdgeDock(compact: boolean, ready: boolean, changing: RefObjec
       const { getCurrentWindow, LogicalSize, PhysicalSize, PhysicalPosition } = await import('@tauri-apps/api/window'); const win = getCurrentWindow()
       if (small && (await win.isMaximized() || await win.isMinimized() || document.querySelector('dialog[open]'))) return
       if (small) {
-        const rect = dockRect(saved.rect, saved.area, saved.edge, saved.scale)
+        const rect = dockRect(saved.rect, saved.area, saved.edge, saved.scale, reminders)
         collapsedRef.current = true; setCollapsed(true)
         await win.setMinSize(new LogicalSize(48, 48)); await win.setSize(new PhysicalSize(rect.width, rect.height)); await win.setPosition(new PhysicalPosition(rect.x, rect.y))
       } else {
@@ -31,7 +31,7 @@ export function useEdgeDock(compact: boolean, ready: boolean, changing: RefObjec
     }
     operation.current = work()
     return operation.current
-  }, [changing, report])
+  }, [changing, report, reminders])
   const release = useCallback(async () => { await operation.current; await resizeDock(false); anchor.current = null; setEdge(null); leaveAt.current = 0 }, [resizeDock])
   useEffect(() => { localStorage.setItem('dayweave-edge-dock', String(enabled)); if (!enabled) void release() }, [enabled, release])
   useEffect(() => {
@@ -62,7 +62,7 @@ export function useEdgeDock(compact: boolean, ready: boolean, changing: RefObjec
         void (async () => {
           const current = anchor.current!; const cursor = await api.cursorPosition()
           if (disposed || changing.current || anchor.current !== current) return
-          const rect = collapsedRef.current ? dockRect(current.rect, current.area, current.edge, current.scale) : current.rect
+          const rect = collapsedRef.current ? dockRect(current.rect, current.area, current.edge, current.scale, reminders) : current.rect
           const hovering = inside(cursor, rect)
           if (collapsedRef.current) { if (hovering) await resizeDock(false); return }
           if (hovering || document.querySelector('dialog[open]') || document.activeElement?.matches('input,textarea,select,[contenteditable=true]')) { leaveAt.current = 0; return }
@@ -74,6 +74,11 @@ export function useEdgeDock(compact: boolean, ready: boolean, changing: RefObjec
     }
     void register().catch(e => report(String(e)))
     return () => { disposed = true; clearTimeout(settle); clearInterval(timer); releases.forEach(fn => fn()) }
-  }, [compact, ready, enabled, changing, report, resizeDock])
+  }, [compact, ready, enabled, changing, report, resizeDock, reminders])
+  useEffect(() => {
+    if (!desktop || !collapsedRef.current || !anchor.current) return
+    const saved=anchor.current
+    void (async()=>{const {getCurrentWindow,PhysicalSize,PhysicalPosition}=await import('@tauri-apps/api/window');const rect=dockRect(saved.rect,saved.area,saved.edge,saved.scale,reminders);const win=getCurrentWindow();await win.setSize(new PhysicalSize(rect.width,rect.height));await win.setPosition(new PhysicalPosition(rect.x,rect.y))})().catch(e=>report(String(e)))
+  },[reminders,report])
   return { enabled, setEnabled, edge, collapsed, collapsedRef, expand: () => resizeDock(false), release }
 }

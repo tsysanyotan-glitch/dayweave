@@ -6,7 +6,7 @@ class ApiError extends Error {
   constructor(public status: number, public code: string, message: string) { super(message) }
 }
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-const writable = new Set(['title','note','date','status','kind','priority','assignee','project','link','waiting','starred','steps','order'])
+const writable = new Set(['title','note','date','status','kind','priority','assignee','project','link','waiting','starred','steps','order','alarm','deadlineAt','reminderAt'])
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization,content-type,if-match,idempotency-key,apikey', 'Access-Control-Allow-Methods': 'GET,POST,PATCH,DELETE,OPTIONS', 'Access-Control-Expose-Headers': 'ETag,Retry-After,X-Request-Id' }
 const json = (data: unknown, status: number, headers: Record<string,string> = {}) => new Response(JSON.stringify(data), { status, headers: { ...cors, 'Content-Type':'application/json; charset=utf-8', 'Cache-Control':'no-store', ...headers } })
 // The hosted gateway strips /functions/v1 before passing the URL to the runtime.

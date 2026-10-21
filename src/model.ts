@@ -1,10 +1,11 @@
 export type Status = 'todo' | 'doing' | 'done'
 export type Priority = 'high' | 'medium' | 'low'
-export type TaskKind = 'planned' | 'issue'
+export type TaskKind = 'planned' | 'issue' | 'alarm'
 export interface Step { id: string; title: string; done: boolean; assignee?: string; active?: boolean; showInSummary?: boolean }
 export interface Output { id: string; name: string; kind: 'file' | 'folder'; size?: number; cloudPath?: string }
 export interface Task {
-  id: string; title: string; note: string; date: string; status: Status; kind: TaskKind
+  id: string; title: string; note: string; date: string; status: Status; kind: 'planned' | 'issue'
+  alarm?: boolean; deadlineAt?: string | null; reminderAt?: string | null
   priority: Priority; assignee: string; project: string; link: string
   waiting: boolean; starred: boolean; steps: Step[]; outputs: Output[]; order?: number
   createdAt: string; updatedAt: string; deletedAt: string | null
@@ -19,8 +20,8 @@ export interface LocalRecord {
 }
 export const statusLabels: Record<Status, string> = { doing: '进行中', todo: '待办任务', done: '已结束' }
 export const priorityLabels: Record<Priority, string> = { high: '高优先', medium: '普通', low: '低优先' }
-export const kindLabels: Record<TaskKind, string> = { planned: '计划任务', issue: '零碎问题' }
-export const taskKind = (task: Task): TaskKind => task.kind ?? 'planned'
+export const kindLabels: Record<TaskKind, string> = { planned: '计划任务', issue: '零碎问题', alarm: '闹钟' }
+export const taskKind = (task: Task): TaskKind => task.alarm ? 'alarm' : task.kind ?? 'planned'
 export const uuid = () => crypto.randomUUID()
 export function dateKey(date = new Date()): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -48,6 +49,10 @@ export function validateTask(value: unknown): Task {
   if (!validDate(t.date)) throw new Error('任务日期无效')
   if (!['todo', 'doing', 'done'].includes(t.status) || !['high', 'medium', 'low'].includes(t.priority)) throw new Error('任务状态无效')
   if (t.kind !== undefined && !['planned', 'issue'].includes(t.kind)) throw new Error('任务类型无效')
+  if (t.alarm !== undefined && typeof t.alarm !== 'boolean') throw new Error('闹钟标记无效')
+  for (const value of [t.deadlineAt, t.reminderAt]) if (value !== undefined && value !== null && (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().replace('.000Z', 'Z') !== value.replace('.000Z', 'Z'))) throw new Error('提醒时间需要有效的 UTC ISO 时间')
+  if (t.alarm && (!t.deadlineAt || !t.reminderAt)) throw new Error('闹钟需要设置截止与提醒时间')
+  if (t.deadlineAt && t.reminderAt && Date.parse(t.reminderAt) > Date.parse(t.deadlineAt)) throw new Error('提醒时间不能晚于截止时间')
   for (const field of ['note', 'assignee', 'project', 'link'] as const) {
     if (typeof t[field] !== 'string' || t[field].length > (field === 'note' ? 20000 : 2000)) throw new Error('任务字段格式无效')
   }
@@ -62,7 +67,7 @@ export function validateTask(value: unknown): Task {
   if (outputs.length > 100 || new Set(outputs.map(o => o.id)).size !== outputs.length) throw new Error('任务产出最多 100 项，且不能重复')
   if (t.order !== undefined && (typeof t.order !== 'number' || !Number.isFinite(t.order) || Math.abs(t.order) > 1e16)) throw new Error('任务顺序无效')
   // Whitelist synchronized fields. Native paths and browser file bytes never enter tasks.
-  return { id: t.id, title: t.title.trim(), note: t.note, date: t.date, status: t.status, kind: taskKind(t), priority: t.priority, assignee: t.assignee, project: t.project, link: t.link, waiting: t.waiting, starred: t.starred, steps: t.steps.map(s => ({ id: s.id, title: s.title.trim(), done: s.done, ...(s.assignee === undefined ? {} : { assignee: s.assignee.trim() }), ...(s.active === undefined ? {} : { active: !s.done && s.active }), ...(s.showInSummary === undefined ? {} : { showInSummary: s.showInSummary }) })), outputs, ...(t.order === undefined ? {} : { order: t.order }), createdAt: t.createdAt, updatedAt: t.updatedAt, deletedAt: t.deletedAt }
+  return { id: t.id, title: t.title.trim(), note: t.note, date: t.date, status: t.status, kind: t.kind ?? 'planned', ...(t.alarm === undefined ? {} : { alarm: t.alarm }), ...(t.deadlineAt === undefined ? {} : { deadlineAt: t.deadlineAt }), ...(t.reminderAt === undefined ? {} : { reminderAt: t.reminderAt }), priority: t.priority, assignee: t.assignee, project: t.project, link: t.link, waiting: t.waiting, starred: t.starred, steps: t.steps.map(s => ({ id: s.id, title: s.title.trim(), done: s.done, ...(s.assignee === undefined ? {} : { assignee: s.assignee.trim() }), ...(s.active === undefined ? {} : { active: !s.done && s.active }), ...(s.showInSummary === undefined ? {} : { showInSummary: s.showInSummary }) })), outputs, ...(t.order === undefined ? {} : { order: t.order }), createdAt: t.createdAt, updatedAt: t.updatedAt, deletedAt: t.deletedAt }
 }
 export function summarySteps(task: Task): Step[] {
   if (task.status === 'done') return []
@@ -90,6 +95,11 @@ function sameWork(a: Task, b: Task) {
 }
 export function fromRemote(scope: string, row: RemoteRow, previous?: Task): LocalRecord {
   const task = validateTask(row.document)
+  if (previous) {
+    if (task.alarm === undefined && previous.alarm !== undefined) task.alarm = previous.alarm
+    if (task.deadlineAt === undefined && previous.deadlineAt !== undefined) task.deadlineAt = previous.deadlineAt
+    if (task.reminderAt === undefined && previous.reminderAt !== undefined) task.reminderAt = previous.reminderAt
+  }
   if (row.id !== task.id || row.user_id !== scope || !Number.isSafeInteger(row.revision) || row.revision < 1) throw new Error('云端任务数据无效')
   // Older clients omit optional step metadata. Retain known values for surviving
   // step IDs; explicit false/empty values from newer clients still clear them.

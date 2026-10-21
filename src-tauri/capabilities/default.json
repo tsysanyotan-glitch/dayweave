@@ -8,7 +8,7 @@
   ],
   "description": "DayWeave window, explicit backup picker and safe external links",
   "windows": [
-    "main"
+    "main", "reminder"
   ],
   "permissions": [
     "core:default",
@@ -31,6 +31,7 @@
     "core:window:allow-set-position",
     "core:window:allow-center",
     "core:window:allow-minimize",
+    "core:window:allow-hide",
     "core:window:allow-start-dragging",
     "core:window:allow-toggle-maximize",
     "core:window:allow-maximize",

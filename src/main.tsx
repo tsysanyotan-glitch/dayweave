@@ -9,8 +9,10 @@ import './task-types.css'
 import './responsive.css'
 import './mobile.css'
 import './windows-v060.css'
+import './reminders.css'
+import { ReminderAlert } from './Reminders'
 
-ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>)
+ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode>{'__DAYWEAVE_REMINDER__' in window?<ReminderAlert/>:<App />}</React.StrictMode>)
 if (import.meta.env.PROD && 'serviceWorker' in navigator && !('__TAURI_INTERNALS__' in window)) {
   window.addEventListener('load', () => { void navigator.serviceWorker.register('/sw.js').catch(() => {}) })
 }

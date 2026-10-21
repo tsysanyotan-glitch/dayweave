@@ -1,49 +1,612 @@
 {
   "openapi": "3.1.0",
-  "info": {"title":"DayWeave 个人任务 API","version":"1.1.0","description":"在客户端设置中创建个人密钥；仅访问密钥所属账号。每个密钥每分钟最多 60 次请求。写入使用版本检查及幂等 UUID。本机文件内容和路径不通过 API 传输。"},
-  "servers": [{"url":"https://gacbkkhanzgbvrfwycji.supabase.co/functions/v1/dayweave-api"}],
-  "security": [{"personalKey":[]}],
+  "info": {
+    "title": "DayWeave 个人任务 API",
+    "version": "1.2.0",
+    "description": "在客户端设置中创建个人密钥；仅访问密钥所属账号。每个密钥每分钟最多 60 次请求。写入使用版本检查及幂等 UUID。本机文件内容和路径不通过 API 传输。"
+  },
+  "servers": [
+    {
+      "url": "https://gacbkkhanzgbvrfwycji.supabase.co/functions/v1/dayweave-api"
+    }
+  ],
+  "security": [
+    {
+      "personalKey": []
+    }
+  ],
   "paths": {
     "/v1/tasks": {
       "get": {
-        "operationId":"listTasks","summary":"列出账号任务（排除回收站）",
-        "parameters":[
-          {"in":"query","name":"limit","schema":{"type":"integer","minimum":1,"maximum":100,"default":50}},
-          {"in":"query","name":"offset","schema":{"type":"integer","minimum":0,"maximum":100000,"default":0}},
-          {"in":"query","name":"date","schema":{"type":"string","format":"date"}},
-          {"in":"query","name":"status","schema":{"type":"string","enum":["todo","doing","done"]}}
+        "operationId": "listTasks",
+        "summary": "列出账号任务（排除回收站）",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000,
+              "default": 0
+            }
+          },
+          {
+            "in": "query",
+            "name": "date",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "todo",
+                "doing",
+                "done"
+              ]
+            }
+          }
         ],
-        "responses":{"200":{"description":"按任务 ID 升序分页；末页 nextOffset 为 null，满页时仍需继续请求确认结束。","content":{"application/json":{"schema":{"type":"object","required":["data","limit","offset","nextOffset"],"properties":{"data":{"type":"array","items":{"$ref":"#/components/schemas/TaskResult"}},"limit":{"type":"integer"},"offset":{"type":"integer"},"nextOffset":{"type":["integer","null"]}}}}}},"401":{"$ref":"#/components/responses/Error"},"403":{"$ref":"#/components/responses/Error"},"429":{"$ref":"#/components/responses/Error"}}
+        "responses": {
+          "200": {
+            "description": "按任务 ID 升序分页；末页 nextOffset 为 null，满页时仍需继续请求确认结束。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "limit",
+                    "offset",
+                    "nextOffset"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TaskResult"
+                      }
+                    },
+                    "limit": {
+                      "type": "integer"
+                    },
+                    "offset": {
+                      "type": "integer"
+                    },
+                    "nextOffset": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
       },
       "post": {
-        "operationId":"createTask","summary":"新建任务","parameters":[{"$ref":"#/components/parameters/Mutation"}],
-        "requestBody":{"required":true,"content":{"application/json":{"schema":{"allOf":[{"$ref":"#/components/schemas/TaskWrite"},{"type":"object","required":["title","date"],"properties":{"id":{"type":"string","format":"uuid","description":"可选；省略时使用 Idempotency-Key 作为任务 ID"}}}]}}}},
-        "responses":{"201":{"$ref":"#/components/responses/Task"},"200":{"description":"同一幂等 UUID 重试，返回先前结果","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Single"}}}},"400":{"$ref":"#/components/responses/Error"},"401":{"$ref":"#/components/responses/Error"},"403":{"$ref":"#/components/responses/Error"},"409":{"$ref":"#/components/responses/Error"},"413":{"$ref":"#/components/responses/Error"},"415":{"$ref":"#/components/responses/Error"},"429":{"$ref":"#/components/responses/Error"}}
+        "operationId": "createTask",
+        "summary": "新建任务",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Mutation"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/TaskWrite"
+                  },
+                  {
+                    "type": "object",
+                    "required": [
+                      "title",
+                      "date"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "可选；省略时使用 Idempotency-Key 作为任务 ID"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "同一幂等 UUID 重试，返回先前结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Single"
+                }
+              }
+            }
+          },
+          "201": {
+            "$ref": "#/components/responses/Task"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
       }
     },
     "/v1/tasks/{id}": {
-      "parameters":[{"name":"id","in":"path","required":true,"schema":{"type":"string","format":"uuid"}}],
-      "get":{"operationId":"getTask","summary":"读取单项任务和版本","responses":{"200":{"$ref":"#/components/responses/Task"},"401":{"$ref":"#/components/responses/Error"},"404":{"$ref":"#/components/responses/Error"},"429":{"$ref":"#/components/responses/Error"}}},
-      "patch":{"operationId":"updateTask","summary":"局部修改任务，保留未传入字段","parameters":[{"$ref":"#/components/parameters/Mutation"},{"$ref":"#/components/parameters/Revision"}],"requestBody":{"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/TaskWrite"}}}},"responses":{"200":{"$ref":"#/components/responses/Task"},"400":{"$ref":"#/components/responses/Error"},"401":{"$ref":"#/components/responses/Error"},"403":{"$ref":"#/components/responses/Error"},"404":{"$ref":"#/components/responses/Error"},"409":{"$ref":"#/components/responses/Error"},"428":{"$ref":"#/components/responses/Error"},"429":{"$ref":"#/components/responses/Error"}}},
-      "delete":{"operationId":"deleteTask","summary":"移入回收站","parameters":[{"$ref":"#/components/parameters/Mutation"},{"$ref":"#/components/parameters/Revision"}],"responses":{"200":{"$ref":"#/components/responses/Task"},"401":{"$ref":"#/components/responses/Error"},"403":{"$ref":"#/components/responses/Error"},"404":{"$ref":"#/components/responses/Error"},"409":{"$ref":"#/components/responses/Error"},"428":{"$ref":"#/components/responses/Error"},"429":{"$ref":"#/components/responses/Error"}}}
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getTask",
+        "summary": "读取单项任务和版本",
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Task"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateTask",
+        "summary": "局部修改任务，保留未传入字段",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Mutation"
+          },
+          {
+            "$ref": "#/components/parameters/Revision"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskWrite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Task"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "428": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteTask",
+        "summary": "移入回收站",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Mutation"
+          },
+          {
+            "$ref": "#/components/parameters/Revision"
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Task"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error"
+          },
+          "428": {
+            "$ref": "#/components/responses/Error"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
-    "securitySchemes":{"personalKey":{"type":"http","scheme":"bearer","bearerFormat":"dw_<64 hex chars>"}},
+    "securitySchemes": {
+      "personalKey": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "dw_<64 hex chars>"
+      }
+    },
     "parameters": {
-      "Mutation":{"name":"Idempotency-Key","in":"header","required":true,"description":"一次写入使用一个新 UUID；网络重试复用相同值和请求体。","schema":{"type":"string","format":"uuid"}},
-      "Revision":{"name":"If-Match","in":"header","required":true,"description":"最近 GET 返回的 revision，例 3 或带双引号的 \"3\"。","schema":{"type":"string"}}
+      "Mutation": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "一次写入使用一个新 UUID；网络重试复用相同值和请求体。",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "Revision": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "description": "最近 GET 返回的 revision，例 3 或带双引号的 \"3\"。",
+        "schema": {
+          "type": "string"
+        }
+      }
     },
     "responses": {
-      "Task":{"description":"任务及当前版本","headers":{"ETag":{"schema":{"type":"string"},"description":"带双引号的 revision"}},"content":{"application/json":{"schema":{"$ref":"#/components/schemas/Single"}}}},
-      "Error":{"description":"错误；429 时 Retry-After: 60。所有响应附 X-Request-Id。","content":{"application/json":{"schema":{"type":"object","properties":{"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"}}},"requestId":{"type":"string","format":"uuid"}}}}}}
+      "Task": {
+        "description": "任务及当前版本",
+        "headers": {
+          "ETag": {
+            "schema": {
+              "type": "string"
+            },
+            "description": "带双引号的 revision"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Single"
+            }
+          }
+        }
+      },
+      "Error": {
+        "description": "错误；429 时 Retry-After: 60。所有响应附 X-Request-Id。",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "requestId": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        }
+      }
     },
     "schemas": {
-      "Step":{"type":"object","required":["id","title","done"],"properties":{"id":{"type":"string"},"title":{"type":"string","minLength":1,"maxLength":500},"done":{"type":"boolean"},"assignee":{"type":"string","maxLength":80,"description":"子步骤执行者；留空时沿用任务执行者"},"active":{"type":"boolean","description":"正在做，允许多个步骤同时为 true；done 后归为 false"},"showInSummary":{"type":"boolean","description":"缩略行显示；已完成步骤不会显示。未配置任何选择时自动显示第一个未完成步骤"}}},
-      "TaskWrite":{"type":"object","description":"只接受以下字段，POST 额外接受 id。未知字段返回 400。outputs、用户 ID、路径和系统时间不可写。","properties":{"title":{"type":"string","minLength":1,"maxLength":300},"note":{"type":"string","maxLength":20000,"default":""},"date":{"type":"string","format":"date"},"status":{"type":"string","enum":["todo","doing","done"],"default":"todo"},"kind":{"type":"string","enum":["planned","issue"],"default":"planned"},"priority":{"type":"string","enum":["high","medium","low"],"default":"medium"},"assignee":{"type":"string","maxLength":2000,"default":"自己"},"project":{"type":"string","maxLength":2000},"link":{"type":"string","maxLength":2000,"description":"空字符串或 http(s) URL"},"waiting":{"type":"boolean","default":false},"starred":{"type":"boolean","default":false},"steps":{"type":"array","maxItems":200,"items":{"$ref":"#/components/schemas/Step"}},"order":{"type":"number","minimum":-10000000000000000,"maximum":10000000000000000}}},
-      "Task":{"allOf":[{"$ref":"#/components/schemas/TaskWrite"},{"type":"object","required":["id","title","date","status","steps","outputs","createdAt","updatedAt","deletedAt"],"properties":{"id":{"type":"string","format":"uuid"},"createdAt":{"type":"string","format":"date-time"},"updatedAt":{"type":"string","format":"date-time"},"deletedAt":{"type":["string","null"],"format":"date-time"},"outputs":{"type":"array","description":"只读产出元数据，不含本机路径和文件内容","items":{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},"kind":{"type":"string","enum":["file","folder"]},"size":{"type":"integer"},"cloudPath":{"type":"string"}}}}}}]},
-      "TaskResult":{"type":"object","required":["task","revision"],"properties":{"task":{"$ref":"#/components/schemas/Task"},"revision":{"type":"integer","minimum":1}}},
-      "Single":{"type":"object","required":["data"],"properties":{"data":{"$ref":"#/components/schemas/TaskResult"}}}
+      "Step": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "done"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "done": {
+            "type": "boolean"
+          },
+          "assignee": {
+            "type": "string",
+            "maxLength": 80,
+            "description": "子步骤执行者；留空时沿用任务执行者"
+          },
+          "active": {
+            "type": "boolean",
+            "description": "正在做，允许多个步骤同时为 true；done 后归为 false"
+          },
+          "showInSummary": {
+            "type": "boolean",
+            "description": "缩略行显示；已完成步骤不会显示。未配置任何选择时自动显示第一个未完成步骤"
+          }
+        }
+      },
+      "TaskWrite": {
+        "type": "object",
+        "description": "只接受以下字段，POST 额外接受 id。未知字段返回 400。outputs、用户 ID、路径和系统时间不可写。",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 20000,
+            "default": ""
+          },
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "todo",
+              "doing",
+              "done"
+            ],
+            "default": "todo"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "issue"
+            ],
+            "default": "planned"
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "default": "medium"
+          },
+          "assignee": {
+            "type": "string",
+            "maxLength": 2000,
+            "default": "自己"
+          },
+          "project": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "link": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "空字符串或 http(s) URL"
+          },
+          "waiting": {
+            "type": "boolean",
+            "default": false
+          },
+          "starred": {
+            "type": "boolean",
+            "default": false
+          },
+          "steps": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "$ref": "#/components/schemas/Step"
+            }
+          },
+          "order": {
+            "type": "number",
+            "minimum": -10000000000000000,
+            "maximum": 10000000000000000
+          },
+          "alarm": {
+            "type": "boolean",
+            "description": "快捷闹钟标记；kind 仍为 planned，保持旧客户端可读取。"
+          },
+          "deadlineAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "UTC ISO 时间，以 Z 结尾；客户端按北京时间展示。null 明确取消截止。"
+          },
+          "reminderAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "UTC ISO 提醒时间，不晚于截止。null 关闭提醒；alarm=true 时两项时间均必填。"
+          }
+        }
+      },
+      "Task": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TaskWrite"
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "title",
+              "date",
+              "status",
+              "steps",
+              "outputs",
+              "createdAt",
+              "updatedAt",
+              "deletedAt"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "deletedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              },
+              "outputs": {
+                "type": "array",
+                "description": "只读产出元数据，不含本机路径和文件内容",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "file",
+                        "folder"
+                      ]
+                    },
+                    "size": {
+                      "type": "integer"
+                    },
+                    "cloudPath": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "TaskResult": {
+        "type": "object",
+        "required": [
+          "task",
+          "revision"
+        ],
+        "properties": {
+          "task": {
+            "$ref": "#/components/schemas/Task"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "Single": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/TaskResult"
+          }
+        }
+      }
     }
   }
 }

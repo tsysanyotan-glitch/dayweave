@@ -53,6 +53,19 @@ POST 必填 `title` 和 `date`；可选 UUID `id`，省略时以 `Idempotency-Ke
 | starred / waiting | 布尔值 | false |
 | steps | 最多 200 个 `{id,title,done}`，ID 唯一，标题 1–500 字符 | `[]` |
 | order | 有限数字，绝对值不超过 1e16 | 自动排序 |
+| alarm | 布尔值；true 表示快捷闹钟，kind 仍保存 planned | 省略 |
+| deadlineAt | UTC ISO 时间，必须以 Z 结尾；null 明确取消截止 | 省略 |
+| reminderAt | UTC ISO 时间，不晚于 deadlineAt；null 关闭提醒 | 省略 |
+
+v1.2（Windows v0.7.0）支持提醒字段。例如北京时间 2026-10-21 16:00 的闹钟：
+
+```json
+{"title":"提交报告","date":"2026-10-21","kind":"planned","alarm":true,"deadlineAt":"2026-10-21T08:00:00Z","reminderAt":"2026-10-21T08:00:00Z"}
+```
+
+普通任务可以只设置 deadlineAt；提前 15 分钟提醒时，将 reminderAt 设置为 deadlineAt 减 15 分钟。闹钟要求两项时间均存在。API 本身不发送通知：Windows 客户端在运行或托盘驻留时负责提醒；休眠/完全退出期间不唤醒电脑，恢复后补提醒。本机的已知晓记录、5 分钟稍后提醒和开机/托盘设置不进入任务 API。
+
+早期客户端可把闹钟当作 planned 任务读取，不支持提醒 UI。旧版编辑可能省略这些可选字段；Windows 会保留本机已经知道的提醒信息，明确关闭请传 alarm=false、deadlineAt=null、reminderAt=null。新设备无法恢复云端被旧版覆盖的字段。
 
 PATCH 仅传要改的字段即可。`steps` 按整个数组替换：更改一步时先读取，再保留其余步骤一起提交。标记完成通常传 `{"status":"done","waiting":false}`。
 

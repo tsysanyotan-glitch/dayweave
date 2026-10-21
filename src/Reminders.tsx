@@ -1,0 +1,39 @@
+import { useEffect, useState, type FormEvent } from 'react'
+import { Bell, Check, MonitorDown, X } from 'lucide-react'
+import { Modal } from './Modal'
+import { beijingInput, deadlineLabel, fromBeijingInput } from './reminderModel'
+import { newTask, type Task } from './model'
+import { saveTask } from './store'
+import { desktop, android } from './platform'
+import { useTheme } from './theme'
+import { nativeAction, nativeSnapshot, type DesktopSnapshot, type ReminderItem, type useDesktopReminders } from './desktopReminders'
+
+export function DeadlineFields({task,change}:{task:Task;change:(task:Task)=>void}) {
+  const lead=task.deadlineAt&&task.reminderAt?String(Math.max(0,Math.round((Date.parse(task.deadlineAt)-Date.parse(task.reminderAt))/60000))):task.deadlineAt?'none':'0'
+  const setDeadline=(input:string)=>{
+    try {const value=input?fromBeijingInput(input):null;change({...task,deadlineAt:value,reminderAt:value&&lead!=='none'?new Date(Date.parse(value)-Number(lead)*60000).toISOString():task.alarm?value:null})}catch{/* Keep the native control's incomplete edit until it is valid. */}
+  }
+  return <fieldset className="deadline-fields"><legend>{task.alarm?'闹钟时间':'截止与提醒'} · 北京时间</legend><div className="form-grid"><label>截止时间（北京时间）<input aria-label="截止时间（北京时间）" type="datetime-local" required={!!task.alarm} value={task.deadlineAt?beijingInput(new Date(task.deadlineAt)):''} onChange={e=>setDeadline(e.target.value)} /></label><label>提前提醒<select aria-label="提前提醒" disabled={!task.deadlineAt} value={lead} onChange={e=>change({...task,reminderAt:e.target.value==='none'?null:new Date(Date.parse(task.deadlineAt!)-Number(e.target.value)*60000).toISOString()})}>{!task.alarm&&<option value="none">不提醒</option>}<option value="0">到点提醒</option><option value="5">提前 5 分钟</option><option value="15">提前 15 分钟</option><option value="30">提前 30 分钟</option><option value="60">提前 1 小时</option>{lead!=='none'&&!['0','5','15','30','60'].includes(lead)&&<option value={lead}>提前 {lead} 分钟</option>}</select></label></div><small>所有时间均为北京时间，与电脑当前时区无关。</small></fieldset>
+}
+export function QuickAlarm({close,saved}:{close:()=>void;saved:()=>void}) {
+  const [title,setTitle]=useState(''),[time,setTime]=useState(()=>beijingInput(new Date(Date.now()+15*60000))),[error,setError]=useState(''),[busy,setBusy]=useState(false)
+  const submit=async(e:FormEvent)=>{e.preventDefault();if(busy)return;setError('');setBusy(true);try{const at=fromBeijingInput(time);if(Date.parse(at)<=Date.now())throw new Error('请选择未来的北京时间');await saveTask({...newTask(time.slice(0,10)),title,alarm:true,deadlineAt:at,reminderAt:at});saved();close()}catch(e){setError(e instanceof Error?e.message:String(e))}finally{setBusy(false)}}
+  return <Modal title="快捷闹钟" close={close}><form className="editor quick-alarm" onSubmit={submit}><div className="alarm-intro"><Bell size={25}/><p>留下一件到点提醒的小事。</p></div><label>提醒内容<input autoFocus required maxLength={300} value={title} placeholder="例如：提交报告、喝水、开会" onChange={e=>setTitle(e.target.value)} /></label><label>北京时间<input aria-label="闹钟北京时间" required type="datetime-local" value={time} onChange={e=>setTime(e.target.value)} /></label><div className="alarm-presets">{[5,15,30,60].map(n=><button type="button" key={n} onClick={()=>setTime(beijingInput(new Date(Date.now()+n*60000)))}>+{n} 分钟</button>)}</div><p className="muted">隐藏到托盘后继续提醒；完全退出后暂停，下次打开补提醒。</p>{error&&<p className="error" role="alert">{error}</p>}<div className="modal-footer"><button type="button" className="button secondary" onClick={close}>取消</button><button className="button alarm-button" disabled={busy}><Bell size={15}/>{busy?'正在保存…':'设置提醒'}</button></div></form></Modal>
+}
+export function Upcoming({tasks}:{tasks:Task[]}) {
+  if(!tasks.length)return null
+  return <span className="rail-upcoming" aria-label="最近截止提醒"><span className="rail-upcoming-heading">最近提醒</span>{tasks.map(task=><span className={'rail-upcoming-item '+(task.alarm?'is-alarm':'')} key={task.id} title={task.title+' · 北京时间 '+deadlineLabel(task.deadlineAt!)}><span><Bell size={9}/>{deadlineLabel(task.deadlineAt!).slice(-5)}</span><span className="rail-upcoming-title">{task.title}</span></span>)}</span>
+}
+export function ReminderSettings({bridge,act}:{bridge:ReturnType<typeof useDesktopReminders>;act:(p:Promise<unknown>,message?:string)=>void}){
+  const {settings,autostart,update}=bridge
+  return <section className="reminder-settings"><div className="settings-title"><Bell size={18}/><h3>提醒与托盘</h3></div><label>浮条最近提醒数量<select aria-label="浮条最近提醒数量" value={settings.railCount} onChange={e=>act(update({...settings,railCount:Number(e.target.value)}))}>{[1,2,3,4,5].map(n=><option key={n} value={n}>{n} 条</option>)}</select></label>{desktop&&<><label className="setting-check"><input type="checkbox" checked={autostart} onChange={e=>act(update(settings,e.target.checked),'开机启动设置已更新')}/>开机启动</label><label className="setting-check"><input type="checkbox" checked={settings.startHidden} onChange={e=>act(update({...settings,startHidden:e.target.checked}))}/>启动后隐藏到托盘</label><label className="setting-check"><input type="checkbox" checked={settings.closeToTray} onChange={e=>act(update({...settings,closeToTray:e.target.checked}))}/>关闭窗口时隐藏到托盘</label><label className="setting-check"><input type="checkbox" checked={settings.sound} onChange={e=>act(update({...settings,sound:e.target.checked}))}/>提醒声音</label><div className="row-actions"><button onClick={()=>act(nativeAction('hide'))}><MonitorDown size={14}/>隐藏到托盘</button><button onClick={()=>act(nativeAction('quit'))}>退出日序</button></div></>}<p className="muted">Windows 托盘图标可恢复窗口或快捷设置闹钟。休眠期间不唤醒电脑，恢复后补提醒。</p></section>
+}
+export function ReminderAlert(){
+  useTheme()
+  const [snapshot,setSnapshot]=useState<DesktopSnapshot|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false)
+  useEffect(()=>{let disposed=false;let release:(()=>void)|undefined;const refresh=()=>{void nativeSnapshot().then(s=>{if(!disposed)setSnapshot(s)}).catch(e=>setError(String(e)))};void import('@tauri-apps/api/event').then(async({listen})=>{const off=await listen('dayweave-reminders-changed',refresh);if(disposed)off();else release=off;refresh()});return()=>{disposed=true;release?.()}},[])
+  const act=async(item:ReminderItem,action:string)=>{if(busy)return;setBusy(true);try{const {invoke}=await import('@tauri-apps/api/core');await invoke('reminder_action',{key:item.key,action});setSnapshot(await nativeSnapshot())}catch(e){setError(String(e))}finally{setBusy(false)}}
+  const dismissAll=async()=>{for(const item of snapshot?.active??[])await act(item,'dismiss');if(!snapshot?.active.length){const {getCurrentWindow}=await import('@tauri-apps/api/window');await getCurrentWindow().hide()}}
+  return <main className="reminder-alert"><header data-tauri-drag-region><span><Bell size={27}/>时间到了</span><button className="icon-button" aria-label="知晓全部提醒" onClick={()=>void dismissAll()}><X size={20}/></button></header><p className="muted">北京时间 · 提醒会保持置顶，直到你处理。</p><div className="reminder-alert-list">{snapshot?.active.map(item=><article key={item.key} className={item.alarm?'is-alarm':''}><span className="badge">{item.alarm?'闹钟':'任务提醒'}</span><h2>{item.title}</h2><p>北京时间 {deadlineLabel(new Date(item.at).toISOString())}{item.at<item.due?' 提醒 · 截止 '+deadlineLabel(new Date(item.due).toISOString()):''}</p><div className="alert-actions"><button disabled={busy} onClick={()=>void act(item,'snooze')}>5 分钟后</button><button disabled={busy} onClick={()=>void act(item,'dismiss')}>我知道了</button><button disabled={busy} className="alarm-button" onClick={()=>void act(item,'complete')}><Check size={14}/>完成任务</button></div></article>)}</div>{snapshot&&!snapshot.active.length&&<p>暂无到期提醒。<button className="text-button" onClick={()=>void dismissAll()}>关闭</button></p>}{error&&<p className="error" role="alert">{error}</p>}</main>
+}
+export const remindersAvailable=!android

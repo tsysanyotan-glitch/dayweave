@@ -3,13 +3,13 @@ import { Copy, Expand, Minimize2, Minus, PanelRightClose, Pin, PinOff, Square, X
 import { desktop as native, android } from './platform'
 import { useEdgeDock } from './useEdgeDock'
 import { compactSize, compactSizeKey } from './windowGeometry'
-export function useWindowMode(report: (message: string) => void) {
+export function useWindowMode(report: (message: string) => void, reminderCount = 0) {
   const [compact, setCompact] = useState(() => !android && localStorage.getItem('dayweave-compact') === 'true')
   const [pinned, setPinned] = useState(() => localStorage.getItem('dayweave-pinned') === 'true')
   const full = useRef<{ width: number; height: number; x: number; y: number; maximized: boolean } | null>(null)
   const [busy, setBusy] = useState(false), [ready, setReady] = useState(false), [maximized, setMaximized] = useState(false)
   const compactRef = useRef(compact), changing = useRef(false), startup = useRef<Promise<void> | null>(null)
-  const dock = useEdgeDock(compact, ready, changing, report)
+  const dock = useEdgeDock(compact, ready, changing, report, reminderCount)
   const saveCompactSize = useCallback(async () => {
     if (!compactRef.current || dock.collapsedRef.current) return
     const win = (await import('@tauri-apps/api/window')).getCurrentWindow()
@@ -62,7 +62,7 @@ export function useWindowMode(report: (message: string) => void) {
       if (disposed) { resized(); return } unlisten.push(resized)
       const close = await win.onCloseRequested(event => {
         event.preventDefault(); if (closing) return; closing = true
-        void (async () => { clearTimeout(timer); await dock.release(); await saveCompactSize(); await win.destroy() })().catch(e => { closing = false; report('关闭窗口失败：' + String(e)) })
+        void (async () => { clearTimeout(timer); await dock.release(); await saveCompactSize(); const { invoke }=await import('@tauri-apps/api/core');await invoke('desktop_action',{action:'close'});closing=false })().catch(e => { closing = false; report('关闭窗口失败：' + String(e)) })
       })
       if (disposed) close(); else unlisten.push(close)
     }).catch(e => report(String(e)))

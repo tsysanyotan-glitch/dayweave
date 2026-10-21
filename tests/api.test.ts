@@ -34,7 +34,7 @@ describe('personal API contract',()=>{
     valid=true;permissions=['tasks:read'];expect((await call('POST','',{title:'x'},{'Idempotency-Key':crypto.randomUUID()})).status).toBe(403)
   })
   it('creates, retries, reads, updates with CAS, then soft-deletes the same task',async()=>{
-    const key=crypto.randomUUID(),body={title:'API 任务',date:'2026-10-20',status:'doing',assignee:'codex',steps:[{id:'step',title:'检查结果',done:false,assignee:'审阅者',active:true,showInSummary:true}]}
+    const key=crypto.randomUUID(),body={title:'API 任务',date:'2026-10-20',status:'doing',assignee:'codex',alarm:true,deadlineAt:'2026-10-21T08:00:00Z',reminderAt:'2026-10-21T07:45:00Z',steps:[{id:'step',title:'检查结果',done:false,assignee:'审阅者',active:true,showInSummary:true}]}
     let result=await call('POST','',body,{'Idempotency-Key':key.toUpperCase()});expect(result.status).toBe(201)
     const created=await result.json();expect(created.data.task.id).toBe(key);expect(created.data.revision).toBe(1)
     result=await call('POST','',body,{'Idempotency-Key':key.toUpperCase()});expect(result.status).toBe(200);expect(rows).toHaveLength(1)
@@ -42,6 +42,7 @@ describe('personal API contract',()=>{
     expect((await call('PATCH','/'+key,{note:'修改'},{'Idempotency-Key':crypto.randomUUID()})).status).toBe(428)
     result=await call('PATCH','/'+key,{note:'修改'},{'Idempotency-Key':crypto.randomUUID(),'If-Match':'W/"1"'});expect(result.status).toBe(200)
     expect(rows[0].document.steps).toEqual(body.steps)
+    expect(rows[0].document).toMatchObject({alarm:true,deadlineAt:body.deadlineAt,reminderAt:body.reminderAt})
     expect((await call('PATCH','/'+key,{title:'过期修改'},{'Idempotency-Key':crypto.randomUUID(),'If-Match':'1'})).status).toBe(409)
     result=await call('DELETE','/'+key,undefined,{'Idempotency-Key':crypto.randomUUID(),'If-Match':'2'});expect(result.status).toBe(200)
     expect(rows[0].document.deletedAt).toBeTruthy();expect((await (await call('GET')).json()).data).toEqual([])
