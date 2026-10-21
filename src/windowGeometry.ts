@@ -15,7 +15,7 @@ export function clampRect(rect: Rect, area: Rect): Rect {
 }
 export function dockRect(rect: Rect, area: Rect, edge: Edge, scale: number): Rect {
   const vertical = edge === 'left' || edge === 'right'
-  const result = clampRect({ ...rect, width: Math.round((vertical ? 64 : 240) * scale), height: Math.round((vertical ? 208 : 72) * scale) }, area)
+  const result = clampRect({ ...rect, width: Math.round((vertical ? 76 : 280) * scale), height: Math.round((vertical ? 248 : 72) * scale) }, area)
   if (edge === 'right') result.x = area.x + area.width - result.width
   if (edge === 'left') result.x = area.x
   if (edge === 'top') result.y = area.y

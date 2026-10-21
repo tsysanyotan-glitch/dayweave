@@ -71,7 +71,7 @@ describe('window geometry and remembered sizes', () => {
       const rail = dockRect(rect, area, edge, 1.5)
       expect(nearestEdge(rail, area, 1)).toBe(edge)
       expect(clampRect(rail, area)).toEqual(rail)
-      expect(rail.width).toBe(edge === 'left' || edge === 'right' ? 96 : 360)
+      expect(rail.width).toBe(edge === 'left' || edge === 'right' ? 114 : 420)
     }
     expect(nearestEdge(rect, area, 16)).toBe(null)
     expect(clampRect({ ...rect, x: -3000, y: 3000 }, area)).toMatchObject({ x: -1920, y: 340 })

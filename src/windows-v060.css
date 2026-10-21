@@ -79,12 +79,24 @@
 .native-window.compact-mode .frame-controls button { width: 28px; }
 .edge-rail { width: 100vw; height: 100dvh; background: var(--surface); color: var(--ink); border: 1px solid var(--edge); border-radius: 8px; overflow: hidden; }
 .edge-rail > button { width: 100%; height: 100%; display: flex; flex-direction: column; text-align: left; gap: 8px; padding: 10px; }
+.rail-task { display: flex; flex-direction: column; gap: 8px; min-width: 0; min-height: 0; overflow: hidden; }
 .edge-rail strong { font-size: 12px; font-weight: 500; line-height: 1.65; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
 .rail-status { font-size: 9px; color: var(--subtle); display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 .rail-status i { width: 4px; height: 4px; background: #729c7e; border-radius: 50%; }
 .edge-rail small { font-size: 9px; color: var(--subtle); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
-.edge-top > button, .edge-bottom > button { display: grid; grid-template-columns: 40px minmax(0,1fr); align-content: center; gap: 3px 8px; padding: 8px 11px; }
-.edge-top strong, .edge-bottom strong { -webkit-line-clamp: 1; }.edge-top small, .edge-bottom small { grid-column: 2; -webkit-line-clamp: 1; }
+.rail-clock { flex: none; width: 100%; display: flex; flex-direction: column; gap: 2px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--edge); font-variant-numeric: tabular-nums; white-space: nowrap; line-height: 1.4; }
+.rail-clock-zone { color: var(--subtle); font-size: 9px; }
+.rail-clock-time { color: var(--ink); font-size: 18px; font-weight: 600; letter-spacing: -.5px; }
+.rail-clock-date, .rail-clock-weekday, .rail-clock-short-date { color: var(--subtle); font-size: 9px; }
+.rail-clock-short-date { display: none; }
+.edge-top > button, .edge-bottom > button { flex-direction: row; align-items: center; gap: 10px; padding: 8px 11px; }
+.edge-top .rail-task, .edge-bottom .rail-task { flex: 1; gap: 2px; }
+.edge-top strong, .edge-bottom strong { -webkit-line-clamp: 1; }.edge-top small, .edge-bottom small { -webkit-line-clamp: 1; }
+.edge-top .rail-clock, .edge-bottom .rail-clock { width: 103px; align-self: stretch; display: grid; grid-template-columns: 1fr auto; align-content: center; gap: 1px 7px; margin: 0; padding: 0 0 0 10px; border-top: 0; border-left: 1px solid var(--edge); }
+.edge-top .rail-clock-zone, .edge-bottom .rail-clock-zone { grid-column: 1 / -1; }
+.edge-top .rail-clock-time, .edge-bottom .rail-clock-time { grid-row: 2 / 4; align-self: center; font-size: 17px; }
+.edge-top .rail-clock-date, .edge-bottom .rail-clock-date { display: none; }
+.edge-top .rail-clock-short-date, .edge-bottom .rail-clock-short-date { display: block; }
 @media(max-width:380px) { .background-maker { padding: 16px 15px 0; }.crop-adjustments { grid-template-columns: 1fr; }.step-summary { margin-left: 45px; }.compact-mode .step-summary { margin-left: 48px; }.step-summary>div { flex-wrap: wrap; }.step-summary-title { flex-basis: 65%; }.step-assignee { margin-left: 15px; max-width: 90%; }.substeps .step-assignee { margin-left: 0; } }
 html[data-theme=dark] { color-scheme: dark; background: #171c19; color: #dde6df; --green: #39765e; --muted: #a0b0a2; --line: #323d35; --sage: #222c25; --surface: #202822; --surface-soft: #2b382e; --ink: #dfebe0; --subtle: #a4b5a2; --edge: #3a493c; }
 html[data-theme=dark] :is(.native-window .topbar,.modal,.modal-heading,.modal-footer) { background: var(--surface); color: var(--ink); border-color: var(--edge); }

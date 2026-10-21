@@ -28,6 +28,10 @@ try {
   rtk proxy node tests/windows/restart.mjs
   if($LASTEXITCODE -ne 0) { throw 'Restart checks failed.' }
   $owned[-1].WaitForExit(10000) | Out-Null
+  Start-TestApp
+  rtk proxy node tests/windows/clock.mjs
+  if($LASTEXITCODE -ne 0) { throw 'Beijing clock checks failed.' }
+  $owned[-1].WaitForExit(10000) | Out-Null
   Write-Output "PASS Windows Release checks. Isolated profile: $profile"
 } finally {
   foreach($running in $owned) { if(-not $running.HasExited) { Stop-Process -Id $running.Id } }

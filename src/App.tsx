@@ -5,6 +5,7 @@ import { Modal } from './Modal'
 import { TaskAppearance } from './TaskAppearance'
 import { initializeLooks, lookStyle, saveTaskLook, taskLook, useLooks } from './appearance'
 import { StepEditor, StepSummary } from './Steps'
+import { BeijingClock } from './BeijingClock'
 import { useTheme } from './theme'
 import { useCompactToolbar } from './useCompactToolbar'
 import { EmailOtpForm } from './EmailOtpForm'
@@ -128,7 +129,7 @@ function Preferences({ close, act, showTrash, theme }: { theme: ReturnType<typeo
     <section><div className="settings-title"><Folder size={18} /><h3>数据由你保管</h3></div><p className="muted">备份包含当前空间的全部任务及回收站，不包含登录信息。导入会添加副本。</p><div className="settings-actions"><button className="button secondary" onClick={() => act(exportData())}><ArrowDownToLine size={15} />导出备份</button><button className="button secondary" onClick={() => act(chooseBackup())}><ArrowUpFromLine size={15} />导入备份</button><button className="button secondary" onClick={showTrash}><Trash2 size={15} />回收站</button></div><input ref={file} type="file" accept=".json,application/json" hidden onChange={e => { const selected = e.target.files?.[0]; if (selected) act((async () => { if (selected.size > 20 * 1024 * 1024) throw new Error('备份文件不能超过 20 MB'); const count = await importTasks(await selected.text()); setMessage(`已添加 ${count} 个任务副本。`) })()); e.target.value = '' }} /></section>
     {state.email && cloud && <ApiKeys key={state.scope} scope={state.scope} />}
     {!android && <section className="theme-settings"><div className="settings-title"><Sprout size={18} /><h3>外观</h3></div><label>颜色模式<select aria-label="颜色模式" value={theme.preference} onChange={e => theme.setPreference(e.target.value as typeof theme.preference)}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">暗黑</option></select></label><p className="muted">默认跟随 Windows 的浅色或暗黑模式，变化时立即生效。</p></section>}
-    <section className="about"><Sprout size={21} /><div><strong>日序 <span>DAYWEAVE</span></strong><p>v0.6.0 · 给并行任务，留一点秩序。</p><small>Android · Windows · 网页 · 离线优先</small></div></section>
+    <section className="about"><Sprout size={21} /><div><strong>日序 <span>DAYWEAVE</span></strong><p>v0.6.1 · 给并行任务，留一点秩序。</p><small>Android · Windows · 网页 · 离线优先</small></div></section>
     {(message || state.error) && <p className="notice" role="status">{message || state.error}</p>}
     </div>
   </Modal>
@@ -200,7 +201,7 @@ export default function App() {
   const progress = todayTasks.length ? Math.round(todayDone / todayTasks.length * 100) : 0
   const assignees = [...new Set(tasks.flatMap(r => [r.task.assignee, ...r.task.steps.map(s => s.assignee ?? '')]).filter(Boolean))].sort()
   const railTask = tasks.filter(r => r.task.date === state.today && r.task.status !== 'done').sort((a,b) => Number(a.task.status !== 'doing') - Number(b.task.status !== 'doing') || taskOrder(a.task) - taskOrder(b.task))[0]?.task
-  if (windowMode.dock.collapsed) return <div className={'edge-rail edge-' + windowMode.dock.edge}><button aria-label="展开贴边浮窗" title="悬停或点击展开任务列表" onPointerEnter={() => void windowMode.dock.expand()} onFocus={() => void windowMode.dock.expand()} onClick={() => void windowMode.dock.expand()}><span className="rail-status"><i />{railTask ? statusLabels[railTask.status] : '日序'}</span><strong>{railTask?.title || '今天，留一点秩序'}</strong><small>{railTask ? summarySteps(railTask)[0]?.title || railTask.assignee : '悬停展开'}</small></button></div>
+  if (windowMode.dock.collapsed) return <div className={'edge-rail edge-' + windowMode.dock.edge}><button aria-label="展开贴边浮窗" title="悬停或点击展开任务列表" onPointerEnter={() => void windowMode.dock.expand()} onFocus={() => void windowMode.dock.expand()} onClick={() => void windowMode.dock.expand()}><span className="rail-task"><span className="rail-status"><i />{railTask ? statusLabels[railTask.status] : '日序'}</span><strong>{railTask?.title || '今天，留一点秩序'}</strong><small>{railTask ? summarySteps(railTask)[0]?.title || railTask.assignee : '悬停展开'}</small></span><BeijingClock /></button></div>
   return <div className={"app-shell " + (windowMode.compact ? "compact-mode " : "") + (compactFilters ? "compact-filters-open " : "") + (toolbar.visible ? "toolbar-visible " : "") + (windowMode.native ? "native-window" : "")}>
     {sidebar && <div className="sidebar-scrim" onClick={() => setSidebar(false)} />}
     <aside className={'sidebar ' + (sidebar ? 'visible' : '')}>

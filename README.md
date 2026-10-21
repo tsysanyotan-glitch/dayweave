@@ -8,6 +8,12 @@
 
 任务类型补充设计：[电脑](docs/design/dayweave-task-types-desktop.png) · [手机](docs/design/dayweave-task-types-mobile.png) · [提示词](docs/design/task-types-prompts.md)。以上设计图均在对应功能编码前生成。
 
+## v0.6.1 Windows 浮条时钟
+
+贴边浮条底部新增北京时间、日期与星期，固定使用 `Asia/Shanghai`（UTC+8），不随电脑所在时区或夏令时切换。左右边竖排，上下边横排；按分钟刷新，休眠恢复或重新显示时校准。仅更新 Windows 客户端。
+
+编码前生成的 [设计稿](docs/design/dayweave-windows-v061-clock.png) · [ImageGen 提示词](docs/design/windows-v061-prompts.md) · [使用与验证记录](docs/windows-v061.md)。
+
 ## v0.6.0 Windows 更新
 
 本次只发布 Windows 客户端，Android 安装包继续使用 v0.5.0。
