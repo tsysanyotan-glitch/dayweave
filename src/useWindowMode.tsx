@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Copy, Expand, Minimize2, Minus, Pin, PinOff, Square, X } from 'lucide-react'
-import { native } from './outputs'
+import { desktop as native, android } from './platform'
 const compactSizeKey = 'dayweave-compact-size'
 function savedCompactSize() {
   try {
@@ -10,7 +10,7 @@ function savedCompactSize() {
   return { width: 380, height: 620 }
 }
 export function useWindowMode(report: (message: string) => void) {
-  const [compact, setCompact] = useState(() => localStorage.getItem('dayweave-compact') === 'true')
+  const [compact, setCompact] = useState(() => !android && localStorage.getItem('dayweave-compact') === 'true')
   const [pinned, setPinned] = useState(() => localStorage.getItem('dayweave-pinned') === 'true')
   const full = useRef<{ width: number; height: number; x: number; y: number; maximized: boolean } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -83,5 +83,5 @@ export function useWindowMode(report: (message: string) => void) {
     <button disabled={busy} aria-label={maximized ? '还原窗口' : '最大化窗口'} title={maximized ? '还原' : '最大化'} onClick={() => void windowAction('toggleMaximize')}>{maximized ? <Copy size={13} /> : <Square size={13} />}</button>
     <button className="window-close" aria-label="关闭窗口" title="关闭" onClick={() => void windowAction('close')}><X size={17} /></button>
   </div>
-  return { compact, controls, frameControls, native }
+  return { compact, controls: android ? null : controls, frameControls, native }
 }

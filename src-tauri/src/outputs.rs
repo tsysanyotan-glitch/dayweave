@@ -3,7 +3,9 @@ use serde::{Deserialize, Serialize};
 use std::{fs, io::{Cursor, Read, Write}, path::{Path, PathBuf}, sync::Mutex};
 use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
+#[cfg(not(target_os = "android"))]
 use tauri_plugin_opener::OpenerExt;
+use tauri_plugin_fs::{FsExt, OpenOptions};
 
 const LIMIT: u64 = 25 * 1024 * 1024;
 static REGISTRY_LOCK: Mutex<()> = Mutex::new(());
@@ -43,6 +45,18 @@ fn entry(app: &AppHandle, scope: &str, id: &str) -> Result<Entry, String> {
 pub async fn pick_output(app: AppHandle, scope: String, id: String, folder: bool) -> Result<Option<Output>, String> {
     validate(&scope, &id)?;
     tauri::async_runtime::spawn_blocking(move || {
+        #[cfg(target_os = "android")]
+        {
+            if folder { return Err("手机端请选择文件，或在电脑上上传文件夹的 ZIP 副本".into()) }
+            let Some(selected) = crate::mobile_files::pick(&app)?.file else { return Ok(None) };
+            let path: tauri_plugin_fs::FilePath = selected.uri.parse().map_err(|e| format!("无效的文件地址：{e}"))?;
+            let mut options = OpenOptions::new(); options.read(true);
+            let file = app.fs().open(path, options).map_err(|e| e.to_string())?;
+            let mut bytes = Vec::new(); file.take(LIMIT + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+            return cache_bytes(&app, CacheMeta { scope, id, name: selected.name }, &bytes).map(Some);
+        }
+        #[cfg(not(target_os = "android"))]
+        {
         let picker = app.dialog().file().set_title(if folder { "关联本机项目文件夹（不会上传）" } else { "关联本机产出文件（不会上传）" });
         let selected = if folder { picker.blocking_pick_folder() } else { picker.blocking_pick_file() };
         let Some(selected) = selected else { return Ok(None) };
@@ -52,6 +66,7 @@ pub async fn pick_output(app: AppHandle, scope: String, id: String, folder: bool
         let name = path.file_name().ok_or("请选择具体文件夹")?.to_string_lossy().to_string();
         let output = Output { id, name, kind: if folder { "folder" } else { "file" }.into(), size: if folder { None } else { Some(meta.len()) } };
         remember(&registry(&app)?, Entry { scope, output, path }).map(Some)
+        }
     }).await.map_err(|e| e.to_string())?
 }
 #[tauri::command]
@@ -64,7 +79,33 @@ pub fn local_output_ids(app: AppHandle, scope: String) -> Result<Vec<String>, St
 pub async fn open_output(app: AppHandle, scope: String, id: String) -> Result<(), String> {
     let e = entry(&app, &scope, &id)?;
     if !e.path.exists() { return Err("原文件已移动或删除，请重新关联".into()) }
-    app.opener().open_path(e.path.to_string_lossy().into_owned(), None::<&str>).map_err(|e| e.to_string())
+    #[cfg(target_os = "android")]
+    { crate::mobile_files::open(&app, e.path.to_string_lossy().into_owned()) }
+    #[cfg(not(target_os = "android"))]
+    { app.opener().open_path(e.path.to_string_lossy().into_owned(), None::<&str>).map_err(|e| e.to_string()) }
+}
+#[tauri::command]
+pub async fn save_output(app: AppHandle, scope: String, id: String) -> Result<bool, String> {
+    let e = entry(&app, &scope, &id)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(path) = app.dialog().file().set_file_name(&e.output.name).blocking_save_file() else { return Ok(false) };
+        let mut options = OpenOptions::new(); options.write(true).create(true).truncate(true);
+        let mut destination = app.fs().open(path, options).map_err(|e| e.to_string())?;
+        let bytes = read_limited(&e.path)?;
+        destination.write_all(&bytes).map_err(|e| e.to_string())?;
+        Ok(true)
+    }).await.map_err(|e| e.to_string())?
+}
+#[tauri::command]
+pub async fn pick_backup(app: AppHandle) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(path) = app.dialog().file().add_filter("日序备份", &["json"]).blocking_pick_file() else { return Ok(None) };
+        let mut options = OpenOptions::new(); options.read(true);
+        let file = app.fs().open(path, options).map_err(|e| e.to_string())?;
+        let mut bytes = Vec::new(); file.take(20 * 1024 * 1024 + 1).read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+        if bytes.len() > 20 * 1024 * 1024 { return Err("备份文件不能超过 20 MB".into()) }
+        String::from_utf8(bytes).map(Some).map_err(|_| "请选择 UTF-8 编码的日序 JSON 备份".into())
+    }).await.map_err(|e| e.to_string())?
 }
 fn read_limited(path: &Path) -> Result<Vec<u8>, String> {
     let f = fs::File::open(path).map_err(|e| e.to_string())?;
@@ -105,13 +146,28 @@ pub fn cache_output(app: AppHandle, request: tauri::ipc::Request<'_>) -> Result<
     if bytes.len() as u64 > LIMIT { return Err("文件超过 25 MB".into()) }
     let header = request.headers().get("x-output-meta").ok_or("缺少文件信息")?.to_str().map_err(|e| e.to_string())?;
     let decoded = base64::engine::general_purpose::STANDARD.decode(header).map_err(|e| e.to_string())?;
-    let meta: CacheMeta = serde_json::from_slice(&decoded).map_err(|e| e.to_string())?; validate(&meta.scope, &meta.id)?;
+    let meta: CacheMeta = serde_json::from_slice(&decoded).map_err(|e| e.to_string())?;
+    cache_bytes(&app, meta, bytes)
+}
+fn cache_bytes(app: &AppHandle, meta: CacheMeta, bytes: &[u8]) -> Result<Output, String> {
+    validate(&meta.scope, &meta.id)?;
+    if bytes.len() as u64 > LIMIT { return Err("手机本机副本最多 25 MB，请选择较小文件".into()) }
     let name = meta.name.chars().map(|c| if c.is_control() || "<>:\"/\\|?*".contains(c) { '_' } else { c }).collect::<String>();
     let name = name.trim_matches([' ', '.']); if name.is_empty() || name.len() > 240 { return Err("文件名无效或过长".into()) }
-    let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("outputs").join(&meta.scope).join(&meta.id);
+    let base = app.path().app_local_data_dir().map_err(|e| e.to_string())?;
+    #[cfg(target_os = "android")]
+    let base = base.join("files");
+    let dir = base.join("outputs").join(&meta.scope).join(&meta.id);
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?; let path = dir.join(name); fs::write(&path, bytes).map_err(|e| e.to_string())?;
     let output = Output { id: meta.id, name: name.into(), kind: "file".into(), size: Some(bytes.len() as u64) };
     remember(&registry(&app)?, Entry { scope: meta.scope, output, path })
+}
+#[tauri::command]
+pub fn cache_mobile_output(app: AppHandle, scope: String, id: String, name: String, base64: String) -> Result<Output, String> {
+    validate(&scope, &id)?;
+    if base64.len() as u64 > LIMIT.div_ceil(3) * 4 { return Err("文件超过 25 MB".into()) }
+    let bytes = base64::engine::general_purpose::STANDARD.decode(base64).map_err(|_| "文件内容编码无效".to_string())?;
+    cache_bytes(&app, CacheMeta { scope, id, name }, &bytes)
 }
 #[tauri::command]
 pub fn copy_output_scope(app: AppHandle, from: String, to: String, ids: Vec<String>) -> Result<(), String> {

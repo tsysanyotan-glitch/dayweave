@@ -4,7 +4,10 @@ dist/
 .env.*
 !.env.example
 src-tauri/target/
-src-tauri/gen/
+src-tauri/gen/*
+!src-tauri/gen/android/
+*.jks
+*.keystore
 supabase/.temp/
 supabase/.branches/
 test-results/

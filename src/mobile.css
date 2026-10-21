@@ -1,0 +1,40 @@
+/* Android receives system-bar and display-cutout insets from the native window.
+   The web layer handles the keyboard viewport and touch-friendly controls. */
+.android-app { overscroll-behavior-y: none; }
+.android-app .topbar { position: sticky; top: 0; z-index: 21; background: #fafbf8; }
+.android-app .modal { max-height: min(94dvh, calc(var(--visible-height, 100dvh) - 20px)); overscroll-behavior: contain; }
+.android-app .modal-heading { position: sticky; top: 0; background: #fffefa; z-index: 2; }
+.android-app .modal-heading .icon-button { width: 40px; height: 40px; }
+.android-app .editor label, .android-app .auth-form label { font-size: 12px; }
+.android-app .editor input:not([type=checkbox]), .android-app .editor select,
+.android-app .editor textarea, .android-app .auth-form input { min-height: 44px; font-size: 16px; }
+.android-app .row-actions button, .android-app .row-actions select,
+.android-app .output-actions button, .android-app .output-heading button { min-height: 40px; font-size: 12px; }
+.android-app .substeps label { min-height: 40px; align-items: center; font-size: 12px; }
+.android-app .substeps input { width: 18px; height: 18px; margin-top: 0; }
+.android-app .task-main { align-items: flex-start; }
+.android-app .task-title { font-size: 14px; }
+.android-app .task-check { width: 22px; height: 22px; }
+.android-app .task-trailing .icon-button { width: 32px; height: 32px; }
+.android-app .drag-handle { width: 24px; min-height: 36px; margin-inline: -4px; }
+.android-app .task-detail { padding-left: 0; }
+.android-app .task-note, .android-app .output-hint, .android-app .muted { font-size: 12px; }
+.android-app .output-row { flex-wrap: wrap; }
+.android-app .output-info { min-width: 0; }
+.android-app .output-actions { flex-wrap: wrap; gap: 6px 12px; }
+.android-app .sidebar { overflow-y: auto; }
+.android-app .toast { overflow-wrap: anywhere; }
+.android-app.keyboard-open .mobile-nav { display: none; }
+@media (max-height: 500px) {
+  .android-app .main-content { padding-top: 18px; }
+  .android-app .page-heading { margin-bottom: 16px; }
+  .android-app .modal { margin-block: 8px; max-height: calc(var(--visible-height, 100dvh) - 16px); }
+  .android-app .modal-heading { padding-block: 8px; }
+  .android-app .editor, .android-app .settings-body { padding-top: 16px; }
+}
+@media (max-width: 380px) {
+  .android-app .task-main { display: grid; grid-template-columns: 20px 22px 16px minmax(0, 1fr); gap: 6px; }
+  .android-app .task-open { min-width: 0; }
+  .android-app .task-trailing { grid-column: 4; justify-content: flex-end; }
+  .android-app .form-grid { grid-template-columns: minmax(0, 1fr); }
+}

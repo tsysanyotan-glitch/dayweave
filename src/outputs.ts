@@ -1,7 +1,9 @@
 import { openDB } from 'idb'
 import { dataCloud } from './cloud'
 import { uuid, type Output } from './model'
-export const native = '__TAURI_INTERNALS__' in window
+export { native } from './platform'
+import { native } from './platform'
+import { android } from './platform'
 export const OUTPUT_LIMIT = 25 * 1024 * 1024
 const BUCKET = 'task-outputs'
 const files = openDB('dayweave-outputs-v1', 1, { upgrade(db) { db.createObjectStore('files', { keyPath: 'key' }) } })
@@ -53,6 +55,18 @@ export async function cacheCloudOutput(scope: string, output: Output) {
   const { data, error } = await storage.download(output.cloudPath, { cacheNonce: uuid() })
   if (error) throw new Error('下载未完成：' + error.message)
   if (native) {
+    if (android) {
+      // Android's Tauri bridge accepts JSON, but not a raw binary invoke body.
+      // FileReader avoids allocating a JSON number array for large documents.
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(String(reader.result).split(',', 2)[1])
+        reader.onerror = () => reject(reader.error ?? new Error('无法读取下载内容'))
+        reader.readAsDataURL(data)
+      })
+      await invoke('cache_mobile_output', { scope, id: output.id, name: outputFilename(output), base64 })
+      return
+    }
     const meta = new TextEncoder().encode(JSON.stringify({ scope, id: output.id, name: outputFilename(output) }))
     const header = btoa(Array.from(meta, b => String.fromCharCode(b)).join(''))
     await (await import('@tauri-apps/api/core')).invoke('cache_output', await data.arrayBuffer(), { headers: { 'x-output-meta': header } })
@@ -69,4 +83,7 @@ export async function openLocalOutput(scope: string, output: Output, download = 
   const a = document.createElement('a'); a.href = url; a.download = outputFilename(output); a.click()
   setTimeout(() => URL.revokeObjectURL(url), 60000)
   void download
+}
+export async function saveMobileOutput(scope: string, output: Output) {
+  return invoke<boolean>('save_output', { scope, id: output.id })
 }

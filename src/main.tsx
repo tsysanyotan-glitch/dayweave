@@ -7,6 +7,7 @@ import './window.css'
 import './scrollbars.css'
 import './task-types.css'
 import './responsive.css'
+import './mobile.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>)
 if (import.meta.env.PROD && 'serviceWorker' in navigator && !('__TAURI_INTERNALS__' in window)) {

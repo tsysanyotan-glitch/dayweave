@@ -1,7 +1,7 @@
 {
   "name": "dayweave",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -11,7 +11,10 @@
     "test:e2e": "npm run build && playwright test",
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
-    "desktop:build": "tauri build"
+    "desktop:build": "tauri build",
+    "android:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/android.ps1 -Mode dev",
+    "android:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/android.ps1 -Mode build",
+    "android:test": "node tests/android/run.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.118.0",

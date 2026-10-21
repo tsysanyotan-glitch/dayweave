@@ -1,6 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
+  "platforms": ["windows", "linux", "macOS"],
   "description": "DayWeave window, explicit backup picker and safe external links",
   "windows": [
     "main"

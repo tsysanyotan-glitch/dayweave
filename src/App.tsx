@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ArrowDownToLine, ArrowUpFromLine, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, Circle, Cloud, CloudOff, ExternalLink, Flag, Folder, House, ListTodo, LoaderCircle, Menu, MoreHorizontal, Paperclip, Plus, Search, Settings, Sparkles, Sprout, Star, Trash2, X } from 'lucide-react'
 import { cloud } from './cloud'
 import { EmailOtpForm } from './EmailOtpForm'
@@ -9,6 +9,8 @@ import { OutputPanel } from './OutputPanel'
 import { KindFilter, KindIcon, KindPicker } from './TaskKind'
 import { useTaskDrag } from './useTaskDrag'
 import { useWindowMode } from './useWindowMode'
+import { useAndroidBack, useMobileViewport } from './useMobile'
+import { android } from './platform'
 import { copyGuestTasks, exampleTasks, importTasks, initialize, moveTask, patchTask, resolveConflict, saveTask, syncNow, useTasks } from './store'
 import { dateKey, newTask, parseDate, priorityLabels, safeLink, shiftDate, kindLabels, statusLabels, taskKind, taskOrder, uuid, type LocalRecord, type Status, type Task, type TaskKind } from './model'
 
@@ -97,6 +99,12 @@ function Preferences({ close, act, showTrash }: { close: () => void; act: (p: Pr
   const state = useTasks()
   const [message, setMessage] = useState('')
   const file = useRef<HTMLInputElement>(null)
+  const chooseBackup = async () => {
+    if (!android) { file.current?.click(); return }
+    const { invoke } = await import('@tauri-apps/api/core')
+    const content = await invoke<string | null>('pick_backup')
+    if (content !== null) setMessage(`已添加 ${await importTasks(content)} 个任务副本。`)
+  }
   const exportData = async () => {
     const content = JSON.stringify({ format: 'dayweave', version: 1, exportedAt: new Date().toISOString(), tasks: state.records.map(r => r.task) }, null, 2)
     if ('__TAURI_INTERNALS__' in window) {
@@ -109,18 +117,19 @@ function Preferences({ close, act, showTrash }: { close: () => void; act: (p: Pr
     }
   }
   return <Modal title="设置与同步" close={close}>
-    <div className="settings-body"><section><div className="settings-title"><Cloud size={18} /><h3>让任务跟着你走</h3></div><p className="muted">登录同一账号，在电脑与网页间同步。离线时也能继续记录。</p>
+    <div className="settings-body"><section><div className="settings-title"><Cloud size={18} /><h3>让任务跟着你走</h3></div><p className="muted">登录同一账号，在手机、电脑与网页间同步。离线时也能继续记录。</p>
       {!cloud ? <p className="notice">当前为本机模式。配置 Supabase 后即可启用云同步。</p> : state.email ? <div className="account-box"><strong>{state.email}</strong><p>{state.syncing ? '正在同步…' : state.lastSync ? '最近同步 ' + new Date(state.lastSync).toLocaleTimeString('zh-CN') : '等待首次同步'}</p><div className="row-actions"><button onClick={() => act(syncNow())}>立即同步</button><button onClick={() => act(copyGuestTasks().then(count => setMessage(`已复制 ${count} 个本机任务到当前账号；本机原件保留。`)))}>复制离线任务到账号</button><button onClick={() => act(cloud!.auth.signOut().then(({ error }) => { if (error) throw error }), '已退出，已切换到独立的本机任务空间')}>退出登录</button></div></div> : <EmailOtpForm />}
     </section>
-    <section><div className="settings-title"><Folder size={18} /><h3>数据由你保管</h3></div><p className="muted">备份包含当前空间的全部任务及回收站，不包含登录信息。导入会添加副本。</p><div className="settings-actions"><button className="button secondary" onClick={() => act(exportData())}><ArrowDownToLine size={15} />导出备份</button><button className="button secondary" onClick={() => file.current?.click()}><ArrowUpFromLine size={15} />导入备份</button><button className="button secondary" onClick={showTrash}><Trash2 size={15} />回收站</button></div><input ref={file} type="file" accept=".json,application/json" hidden onChange={e => { const selected = e.target.files?.[0]; if (selected) act((async () => { if (selected.size > 20 * 1024 * 1024) throw new Error('备份文件不能超过 20 MB'); const count = await importTasks(await selected.text()); setMessage(`已添加 ${count} 个任务副本。`) })()); e.target.value = '' }} /></section>
+    <section><div className="settings-title"><Folder size={18} /><h3>数据由你保管</h3></div><p className="muted">备份包含当前空间的全部任务及回收站，不包含登录信息。导入会添加副本。</p><div className="settings-actions"><button className="button secondary" onClick={() => act(exportData())}><ArrowDownToLine size={15} />导出备份</button><button className="button secondary" onClick={() => act(chooseBackup())}><ArrowUpFromLine size={15} />导入备份</button><button className="button secondary" onClick={showTrash}><Trash2 size={15} />回收站</button></div><input ref={file} type="file" accept=".json,application/json" hidden onChange={e => { const selected = e.target.files?.[0]; if (selected) act((async () => { if (selected.size > 20 * 1024 * 1024) throw new Error('备份文件不能超过 20 MB'); const count = await importTasks(await selected.text()); setMessage(`已添加 ${count} 个任务副本。`) })()); e.target.value = '' }} /></section>
     {state.email && cloud && <ApiKeys key={state.scope} scope={state.scope} />}
-    <section className="about"><Sprout size={21} /><div><strong>日序 <span>DAYWEAVE</span></strong><p>v0.4.0 · 给并行任务，留一点秩序。</p><small>Windows 客户端 · 响应式网页 · 离线优先</small></div></section>
+    <section className="about"><Sprout size={21} /><div><strong>日序 <span>DAYWEAVE</span></strong><p>v0.5.0 · 给并行任务，留一点秩序。</p><small>Android · Windows · 网页 · 离线优先</small></div></section>
     {(message || state.error) && <p className="notice" role="status">{message || state.error}</p>}
     </div>
   </Modal>
 }
 
 export default function App() {
+  useMobileViewport()
   const state = useTasks()
   const [view, setView] = useState<View>('day')
   const [date, setDate] = useState(dateKey())
@@ -138,6 +147,12 @@ export default function App() {
   const [sidebar, setSidebar] = useState(false)
   const [compactFilters, setCompactFilters] = useState(false)
   const [toast, setToast] = useState('')
+  const closeMobileLayer = useCallback(() => {
+    if (sidebar) { setSidebar(false); return true }
+    if (view !== 'day') { setView('day'); return true }
+    return false
+  }, [sidebar, view])
+  useAndroidBack(closeMobileLayer, setToast)
   const windowMode = useWindowMode(setToast)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [collapsed, setCollapsed] = useState<Set<Status>>(() => { try { return new Set(JSON.parse(localStorage.getItem('dayweave-collapsed') || '[]')) } catch { return new Set() } })
@@ -185,7 +200,7 @@ export default function App() {
       <div className="sidebar-bottom"><button onClick={() => setSettings(true)} className="sync-button">{!state.online ? <CloudOff size={18} /> : <Cloud size={18} />}<span>{!state.online ? '离线 · 本机保存' : state.email ? state.syncing ? '正在同步' : state.error ? '同步待重试' : pendingSync ? `${pendingSync} 项待同步` : '云端已同步' : '本机模式'}</span><i className={state.email && !state.error && state.online ? 'connected' : ''} /></button><button onClick={() => setSettings(true)}><Settings size={18} /><span>设置与同步</span><MoreHorizontal size={16} /></button><div className="profile"><span>{state.email ? state.email.charAt(0).toUpperCase() : '我'}</span><div><strong>{state.email ? state.email.split('@')[0] : '我的日序'}</strong><small>{state.email ? '个人云空间' : '离线也能安心记录'}</small></div></div></div>
     </aside>
     <div className="workspace"><header className="topbar" data-tauri-drag-region={windowMode.native ? "deep" : undefined}><div><button className="icon-button mobile-menu" aria-label="打开侧栏" onClick={() => setSidebar(true)}><Menu size={20} /></button><span className="breadcrumb">个人空间 <ChevronRight size={12} /> <strong>{view === 'trash' ? '回收站' : navItems.find(x => x.id === view)?.label}</strong></span></div><div className="topbar-right">{windowMode.controls}<span className="today-label">{new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }).format(new Date())}</span><button className="icon-button" aria-label="打开设置" onClick={() => setSettings(true)}><Settings size={17} /></button>{windowMode.frameControls}</div></header>
-      <div className="workspace-body"><main className="main-content">{windowMode.compact && <div className="compact-summary"><div><strong data-tauri-drag-region>日序 · {date.slice(5).replace("-", "月")}日</strong><small>{todayTasks.filter(r => r.task.status === "doing").length} 进行中 · {todayTasks.filter(r => r.task.status === "todo").length} 待办</small></div><div className="compact-summary-actions"><button className="icon-button compact-filter-toggle" aria-label="筛选任务" aria-expanded={compactFilters} onClick={() => setCompactFilters(v => !v)}><Search size={16} /></button><button className="icon-button" aria-label="新建任务" onClick={() => createTask()}><Plus size={19} /></button></div></div>}<div className="page-heading"><div><div className="eyebrow">A LITTLE ORDER, EVERY DAY</div><h1>{heading}</h1><p>{view === 'day' ? `${parseDate(date).getMonth() + 1}月${parseDate(date).getDate()}日，星期${weekdays[parseDate(date).getDay()]} · ${date === dateKey() ? '从容开启今天' : '提前安排，也能回顾过去'}` : view === 'trash' ? '删除的任务仍保留在这里，可以随时恢复。' : view === 'done' ? `已经完成 ${tasks.filter(r => r.task.status === 'done').length} 件事，继续按自己的节奏前进。` : `${tasks.length} 个任务，一处掌握所有进展。`}</p></div><button className="button primary new-task" onClick={() => createTask()} disabled={!state.ready}><Plus size={17} /><span>新建任务</span><kbd>N</kbd></button></div>
+      <div className="workspace-body"><main className="main-content">{windowMode.compact && <div className="compact-summary"><div><strong data-tauri-drag-region>日序 · {date.slice(5).replace("-", "月")}日</strong><small>{todayTasks.filter(r => r.task.status === "doing").length} 进行中 · {todayTasks.filter(r => r.task.status === "todo").length} 待办</small></div><div className="compact-summary-actions"><button className="icon-button compact-filter-toggle" aria-label="筛选任务" aria-expanded={compactFilters} onClick={() => setCompactFilters(v => !v)}><Search size={16} /></button><button className="icon-button" aria-label="新建任务" onClick={() => createTask()}><Plus size={19} /></button></div></div>}<div className="page-heading"><div><div className="eyebrow">A LITTLE ORDER, EVERY DAY</div><h1>{heading}</h1><p>{view === 'day' ? `${parseDate(date).getMonth() + 1}月${parseDate(date).getDate()}日，星期${weekdays[parseDate(date).getDay()]} · ${date === dateKey() ? '从容开启今天' : '提前安排，也能回顾过去'}` : view === 'trash' ? '删除的任务仍保留在这里，可以随时恢复。' : view === 'done' ? `已经完成 ${tasks.filter(r => r.task.status === 'done').length} 件事，继续按自己的节奏前进。` : `${tasks.length} 个任务，一处掌握所有进展。`}</p></div><button className="button primary new-task" aria-label="新建任务" onClick={() => createTask()} disabled={!state.ready}><Plus size={17} /><span>新建任务</span><kbd>N</kbd></button></div>
       {view === 'day' && <div className="week-strip"><button className="icon-button week-prev" aria-label="上一周" onClick={() => setDate(shiftDate(date, -7))}><ChevronLeft size={17} /></button>{Array.from({ length: 7 }, (_, i) => shiftDate(weekStart, i)).map(day => <button className={'week-day ' + (date === day ? 'selected' : '')} key={day} onClick={() => setDate(day)} aria-label={'选择日期 ' + day} aria-pressed={date === day}><span>周{weekdays[parseDate(day).getDay()]}</span><strong>{parseDate(day).getDate()}</strong><i className={tasks.some(r => r.task.date === day && r.task.status !== 'done') ? 'has-tasks' : ''} /></button>)}<button className="icon-button" aria-label="下一周" onClick={() => setDate(shiftDate(date, 7))}><ChevronRight size={17} /></button></div>}
       <div className="list-toolbar"><div className="search-input"><Search size={16} /><input ref={searchRef} aria-label="搜索任务" placeholder="搜索任务、项目或步骤" value={search} onChange={e => setSearch(e.target.value)} />{search ? <button className="icon-button" aria-label="清空搜索" onClick={() => setSearch('')}><X size={14} /></button> : <kbd>/</kbd>}</div><select aria-label="筛选执行者" value={assignee} onChange={e => setAssignee(e.target.value)}><option value="all">全部执行者</option>{[...new Set(tasks.map(r => r.task.assignee))].sort().map(a => <option key={a}>{a}</option>)}</select><button className="icon-button" aria-label="跳转到今天" title="跳转到今天" onClick={() => selectDate(dateKey())}><House size={16} /></button></div>
       <KindFilter value={kindFilter} change={setKindFilter} />

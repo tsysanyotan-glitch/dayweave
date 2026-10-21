@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "android",
+  "description": "Android document save picker and explicit app back navigation",
+  "platforms": ["android"],
+  "windows": ["main"],
+  "permissions": [
+    "core:default", "core:app:allow-exit", "dialog:allow-save", "fs:allow-write-text-file",
+    { "identifier": "opener:allow-open-url", "allow": [{ "url": "https://*" }, { "url": "http://*" }] }
+  ]
+}

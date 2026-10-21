@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Cloud, Download, FileText, Folder, HardDrive, LoaderCircle, Paperclip, Upload, X } from 'lucide-react'
 import { clearCloudReference, patchTask, useTasks } from './store'
 import type { Output, Task } from './model'
-import { addBrowserOutput, cacheCloudOutput, chooseOutput, localOutputIds, native, openLocalOutput, removeCloudOutput, uploadOutput } from './outputs'
+import { addBrowserOutput, cacheCloudOutput, chooseOutput, localOutputIds, native, openLocalOutput, removeCloudOutput, saveMobileOutput, uploadOutput } from './outputs'
+import { android, desktop } from './platform'
 
 export function OutputPanel({ task }: { task: Task }) {
   const state = useTasks(); const scope = state.scope
@@ -42,18 +43,19 @@ export function OutputPanel({ task }: { task: Task }) {
   }
   return <section className="output-panel" aria-label="任务产出">
     <div className="output-heading"><h3><Paperclip size={14} />任务产出 <small>{outputs.length}</small></h3><div>
-      {native ? <><button disabled={!!busy || outputs.length >= 100} onClick={() => void run('pick', async () => append(await chooseOutput(scope)))}><FileText size={13} />关联文件</button><button disabled={!!busy || outputs.length >= 100} onClick={() => void run('pick', async () => append(await chooseOutput(scope, true)))}><Folder size={13} />关联文件夹</button></> : <button disabled={!!busy || outputs.length >= 100} onClick={() => fileInput.current?.click()}><FileText size={13} />添加本机文件</button>}
+      {native ? <><button disabled={!!busy || outputs.length >= 100} onClick={() => void run('pick', async () => append(await chooseOutput(scope)))}><FileText size={13} />{android ? '添加手机文件' : '关联文件'}</button>{desktop && <button disabled={!!busy || outputs.length >= 100} onClick={() => void run('pick', async () => append(await chooseOutput(scope, true)))}><Folder size={13} />关联文件夹</button>}</> : <button disabled={!!busy || outputs.length >= 100} onClick={() => fileInput.current?.click()}><FileText size={13} />添加本机文件</button>}
       <input ref={fileInput} type="file" hidden aria-label="选择本机产出文件" onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void run('pick', async () => append(await addBrowserOutput(scope, file))) }} />
     </div></div>
-    <p className="output-hint">默认仅在本机。上传需逐项确认；名称随任务同步，本机路径与文件内容不会自动上传。{!native && ' 文件夹请在 Windows 客户端关联。'}</p>
+    <p className="output-hint">默认仅在本机。上传需逐项确认；名称随任务同步，本机路径与文件内容不会自动上传。{!desktop && ' 文件夹请在电脑上上传 ZIP 副本。'}{android && ' 手机所选文件会复制到应用内，卸载应用会移除这些本地副本。'}</p>
     {outputs.map(output => <div className="output-row" key={output.id} data-testid="output-row">
       {output.kind === 'folder' ? <Folder size={19} /> : <FileText size={19} />}
-      <div className="output-info"><strong>{output.name}</strong><div><span className={'output-badge ' + (output.cloudPath ? 'cloud' : '')}>{output.cloudPath ? <Cloud size={11} /> : <HardDrive size={11} />}{output.cloudPath ? '云端可查' : local.has(output.id) ? '仅在本机' : '仅在原电脑'}</span>{output.kind === 'folder' && <small>文件夹{output.cloudPath ? ' · ZIP 副本' : ''}</small>}</div>{!local.has(output.id) && !output.cloudPath && <small>请在原电脑上传，或在当前 Windows 客户端重新关联。</small>}</div>
+      <div className="output-info"><strong>{output.name}</strong><div><span className={'output-badge ' + (output.cloudPath ? 'cloud' : '')}>{output.cloudPath ? <Cloud size={11} /> : <HardDrive size={11} />}{output.cloudPath ? '云端可查' : local.has(output.id) ? '仅在本机' : '仅在其他设备'}</span>{output.kind === 'folder' && <small>文件夹{output.cloudPath ? ' · ZIP 副本' : ''}</small>}</div>{!local.has(output.id) && !output.cloudPath && <small>请在原设备上传，或在当前设备重新关联文件。文件夹需在电脑上处理。</small>}</div>
       <div className="output-actions">{busy === output.id ? <LoaderCircle className="spin" size={16} /> : <>
         {local.has(output.id) && <button disabled={!!busy} onClick={() => void run(output.id, () => openLocalOutput(scope, output))}>{native ? '打开本机' : '保存本机文件'}</button>}
+        {android && local.has(output.id) && <button disabled={!!busy} onClick={() => void run(output.id, async () => { if (await saveMobileOutput(scope, output)) setMessage('文件已保存到你选择的位置。') })}><Download size={12} />保存到手机</button>}
         {output.cloudPath && <><button disabled={!!busy} onClick={() => void run(output.id, async () => { await cacheCloudOutput(scope, output); await openLocalOutput(scope, output, true) })}><Download size={12} />{native ? '下载并打开' : '下载'}</button><button disabled={!!busy} onClick={() => setConfirm({ output, mode: 'local' })}>改为仅本机</button></>}
         {!output.cloudPath && local.has(output.id) && <button disabled={!!busy || scope === 'guest' || !state.online} title={scope === 'guest' ? '登录云账号后可上传' : '主动上传私有副本'} onClick={() => setConfirm({ output, mode: 'upload' })}><Upload size={12} />上传到云端</button>}
-        {!local.has(output.id) && native && <button disabled={!!busy} onClick={() => void run(output.id, async () => { const selected = await chooseOutput(scope, output.kind === 'folder', output.id); if (selected) { await patchTask(task.id, t => ({ ...t, outputs: t.outputs.map(o => o.id === output.id ? { ...selected, cloudPath: o.cloudPath } : o) }), scope) } })}>重新关联</button>}
+        {!local.has(output.id) && native && (!android || output.kind !== 'folder') && <button disabled={!!busy} onClick={() => void run(output.id, async () => { const selected = await chooseOutput(scope, output.kind === 'folder', output.id); if (selected) { await patchTask(task.id, t => ({ ...t, outputs: t.outputs.map(o => o.id === output.id ? { ...selected, cloudPath: o.cloudPath } : o) }), scope) } })}>重新关联</button>}
         <button aria-label={'移除产出关联：' + output.name} disabled={!!busy} onClick={() => setConfirm({ output, mode: 'unlink' })}><X size={12} /></button>
       </>}</div>
     </div>)}
