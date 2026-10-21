@@ -1,0 +1,38 @@
+import { chromium, expect } from '@playwright/test'
+import fs from 'node:fs'
+if(process.env.DAYWEAVE_NATIVE_TEST !== '1') throw new Error('Use the isolated test launcher.')
+const browser=await chromium.connectOverCDP(process.env.DAYWEAVE_CDP || 'http://127.0.0.1:9240')
+const page=browser.contexts()[0].pages()[0], errors=[]
+page.on('pageerror',e=>errors.push(e.message))
+try {
+ await expect(page.locator('.compact-mode')).toBeVisible()
+ await expect.poll(()=>page.evaluate(()=>Math.abs(innerWidth-330))).toBeLessThanOrEqual(2)
+ await expect.poll(()=>page.evaluate(()=>Math.abs(innerHeight-420))).toBeLessThanOrEqual(2)
+ await expect(page.getByLabel('当前步骤：日序 · Windows 并行项目',{exact:true})).toContainText('设计界面与裁剪背景')
+ await expect(page.getByLabel('当前步骤：日序 · Windows 并行项目',{exact:true})).toContainText('实现贴边浮窗与尺寸记忆')
+ await page.mouse.move(8,80);await page.mouse.move(12,4)
+ await expect(page.getByRole('button',{name:'取消窗口置顶',exact:true})).toBeVisible()
+ await page.getByRole('button',{name:'取消窗口置顶',exact:true}).click()
+ await page.getByRole('button',{name:'恢复完整视图',exact:true}).click()
+ await page.getByRole('button',{name:'展开：日序 · Windows 并行项目'}).click();await page.getByRole('button',{name:'编辑',exact:true}).click()
+ await page.getByRole('button',{name:'上传并制作背景',exact:true}).click()
+ const source=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=800;c.height=500;const ctx=c.getContext('2d');const gradient=ctx.createLinearGradient(0,0,800,500);gradient.addColorStop(0,'#adc2a5');gradient.addColorStop(1,'#e4d0b5');ctx.fillStyle=gradient;ctx.fillRect(0,0,800,500);return c.toDataURL('image/png').split(',')[1]})
+ const maker=page.getByRole('dialog',{name:'制作任务背景',exact:true})
+ await maker.getByLabel('上传背景原图').setInputFiles({name:'Windows背景.png',mimeType:'image/png',buffer:Buffer.from(source,'base64')})
+ await expect(maker.getByAltText('背景原图')).toBeVisible()
+ await maker.getByRole('slider',{name:'背景不透明度'}).fill('32')
+ await maker.getByLabel('背景名称').fill('日序·本机背景')
+ await page.screenshot({path:'artifacts/windows-v060-native-crop.png'})
+ await maker.getByRole('button',{name:'保存为可选背景',exact:true}).click()
+ await page.getByRole('dialog',{name:'编辑任务',exact:true}).getByRole('button',{name:'保存任务',exact:true}).click()
+ await expect(page.getByTestId('task-row')).toHaveClass(/image-look/)
+ await page.reload();await expect(page.getByTestId('task-row')).toHaveClass(/image-look/)
+ await page.getByRole('button',{name:'切换精简视图',exact:true}).click()
+ await page.mouse.move(100,180);await page.evaluate(()=>document.activeElement?.blur())
+ await expect.poll(()=>page.locator('.topbar').evaluate(el=>getComputedStyle(el).opacity)).toBe('0')
+ await page.screenshot({path:'artifacts/windows-v060-native-idle.png'})
+ expect(errors).toEqual([])
+ const closed=page.waitForEvent('close');await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('plugin:window|close',{label:'main'}));await closed
+ fs.writeFileSync('artifacts/windows-v060-restart-results.json',JSON.stringify({checks:['Restart restores 330×420 compact size, pin state and both concurrent steps','Actual Windows image picker/CSP/blob preview/crop/opacity/library persistence','Idle compact toolbar leaves full content space'],errors},null,2))
+ console.log('PASS Restart: compact size + pin + concurrent steps; Windows local crop/background persistence; idle toolbar; graceful close')
+} finally {await browser.close().catch(()=>{})}

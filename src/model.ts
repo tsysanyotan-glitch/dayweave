@@ -1,7 +1,7 @@
 export type Status = 'todo' | 'doing' | 'done'
 export type Priority = 'high' | 'medium' | 'low'
 export type TaskKind = 'planned' | 'issue'
-export interface Step { id: string; title: string; done: boolean }
+export interface Step { id: string; title: string; done: boolean; assignee?: string; active?: boolean; showInSummary?: boolean }
 export interface Output { id: string; name: string; kind: 'file' | 'folder'; size?: number; cloudPath?: string }
 export interface Task {
   id: string; title: string; note: string; date: string; status: Status; kind: TaskKind
@@ -54,6 +54,7 @@ export function validateTask(value: unknown): Task {
   if (typeof t.waiting !== 'boolean' || typeof t.starred !== 'boolean') throw new Error('任务标记无效')
   if (!Array.isArray(t.steps) || t.steps.length > 200 || t.steps.some(s => !s || typeof s.id !== 'string' || typeof s.title !== 'string' || !s.title.trim() || s.title.length > 500 || typeof s.done !== 'boolean')) throw new Error('子步骤格式无效')
   if (new Set(t.steps.map(s => s.id)).size !== t.steps.length) throw new Error('子步骤 ID 重复')
+  if (t.steps.some(s => (s.assignee !== undefined && (typeof s.assignee !== 'string' || s.assignee.length > 80)) || (s.active !== undefined && typeof s.active !== 'boolean') || (s.showInSummary !== undefined && typeof s.showInSummary !== 'boolean'))) throw new Error('子步骤执行信息无效')
   if (![t.createdAt, t.updatedAt].every(x => typeof x === 'string' && !Number.isNaN(Date.parse(x))) || (t.deletedAt !== null && (typeof t.deletedAt !== 'string' || Number.isNaN(Date.parse(t.deletedAt))))) throw new Error('任务时间无效')
   if (t.link && !safeLink(t.link)) throw new Error('关联链接需要以 https:// 或 http:// 开头')
   if (t.outputs !== undefined && !Array.isArray(t.outputs)) throw new Error('任务产出格式无效')
@@ -61,7 +62,12 @@ export function validateTask(value: unknown): Task {
   if (outputs.length > 100 || new Set(outputs.map(o => o.id)).size !== outputs.length) throw new Error('任务产出最多 100 项，且不能重复')
   if (t.order !== undefined && (typeof t.order !== 'number' || !Number.isFinite(t.order) || Math.abs(t.order) > 1e16)) throw new Error('任务顺序无效')
   // Whitelist synchronized fields. Native paths and browser file bytes never enter tasks.
-  return { id: t.id, title: t.title.trim(), note: t.note, date: t.date, status: t.status, kind: taskKind(t), priority: t.priority, assignee: t.assignee, project: t.project, link: t.link, waiting: t.waiting, starred: t.starred, steps: t.steps.map(s => ({ id: s.id, title: s.title.trim(), done: s.done })), outputs, ...(t.order === undefined ? {} : { order: t.order }), createdAt: t.createdAt, updatedAt: t.updatedAt, deletedAt: t.deletedAt }
+  return { id: t.id, title: t.title.trim(), note: t.note, date: t.date, status: t.status, kind: taskKind(t), priority: t.priority, assignee: t.assignee, project: t.project, link: t.link, waiting: t.waiting, starred: t.starred, steps: t.steps.map(s => ({ id: s.id, title: s.title.trim(), done: s.done, ...(s.assignee === undefined ? {} : { assignee: s.assignee.trim() }), ...(s.active === undefined ? {} : { active: !s.done && s.active }), ...(s.showInSummary === undefined ? {} : { showInSummary: s.showInSummary }) })), outputs, ...(t.order === undefined ? {} : { order: t.order }), createdAt: t.createdAt, updatedAt: t.updatedAt, deletedAt: t.deletedAt }
+}
+export function summarySteps(task: Task): Step[] {
+  if (task.status === 'done') return []
+  const explicit = task.steps.some(s => s.active !== undefined || s.showInSummary !== undefined)
+  return explicit ? task.steps.filter(s => !s.done && (s.showInSummary ?? s.active ?? false)) : task.steps.filter(s => !s.done).slice(0, 1)
 }
 export function validateOutput(value: unknown): Output {
   const o = value as Output
@@ -82,13 +88,20 @@ function sameWork(a: Task, b: Task) {
   const { date: _bd, updatedAt: _bu, ...right } = validateTask(b)
   return JSON.stringify(left) === JSON.stringify(right)
 }
-export function fromRemote(scope: string, row: RemoteRow): LocalRecord {
+export function fromRemote(scope: string, row: RemoteRow, previous?: Task): LocalRecord {
   const task = validateTask(row.document)
   if (row.id !== task.id || row.user_id !== scope || !Number.isSafeInteger(row.revision) || row.revision < 1) throw new Error('云端任务数据无效')
+  // Older clients omit optional step metadata. Retain known values for surviving
+  // step IDs; explicit false/empty values from newer clients still clear them.
+  if (previous) task.steps = task.steps.map(step => {
+    const old = previous.steps.find(s => s.id === step.id)
+    if (!old) return step
+    return { ...step, ...(step.assignee === undefined && old.assignee !== undefined ? { assignee: old.assignee } : {}), ...(step.active === undefined && old.active !== undefined ? { active: !step.done && old.active } : {}), ...(step.showInSummary === undefined && old.showInSummary !== undefined ? { showInSummary: old.showInSummary } : {}) }
+  })
   return { scope, task, serverRevision: row.revision, dirty: false, mutationId: row.last_mutation_id }
 }
 export function mergeRemote(local: LocalRecord | undefined, row: RemoteRow): LocalRecord {
-  const remote = fromRemote(row.user_id, row)
+  const remote = fromRemote(row.user_id, row, local?.task)
   if (!local) return remote
   if (local.scope !== row.user_id) throw new Error('任务账号不匹配')
   if (row.revision <= local.serverRevision) return local
@@ -101,7 +114,7 @@ export function mergeRemote(local: LocalRecord | undefined, row: RemoteRow): Loc
   return remote
 }
 export function acknowledge(current: LocalRecord, sent: LocalRecord, row: RemoteRow): LocalRecord {
-  const remote = fromRemote(current.scope, row)
+  const remote = fromRemote(current.scope, row, current.task)
   if (current.mutationId === sent.mutationId) return remote
   // An edit made while the request was in flight remains queued on the acknowledged revision.
   return { ...current, serverRevision: row.revision, conflict: undefined }

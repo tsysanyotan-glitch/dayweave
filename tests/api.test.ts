@@ -34,7 +34,7 @@ describe('personal API contract',()=>{
     valid=true;permissions=['tasks:read'];expect((await call('POST','',{title:'x'},{'Idempotency-Key':crypto.randomUUID()})).status).toBe(403)
   })
   it('creates, retries, reads, updates with CAS, then soft-deletes the same task',async()=>{
-    const key=crypto.randomUUID(),body={title:'API 任务',date:'2026-10-20',status:'doing',assignee:'codex',steps:[{id:'step',title:'检查结果',done:false}]}
+    const key=crypto.randomUUID(),body={title:'API 任务',date:'2026-10-20',status:'doing',assignee:'codex',steps:[{id:'step',title:'检查结果',done:false,assignee:'审阅者',active:true,showInSummary:true}]}
     let result=await call('POST','',body,{'Idempotency-Key':key.toUpperCase()});expect(result.status).toBe(201)
     const created=await result.json();expect(created.data.task.id).toBe(key);expect(created.data.revision).toBe(1)
     result=await call('POST','',body,{'Idempotency-Key':key.toUpperCase()});expect(result.status).toBe(200);expect(rows).toHaveLength(1)

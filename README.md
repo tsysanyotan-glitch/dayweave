@@ -8,7 +8,19 @@
 
 任务类型补充设计：[电脑](docs/design/dayweave-task-types-desktop.png) · [手机](docs/design/dayweave-task-types-mobile.png) · [提示词](docs/design/task-types-prompts.md)。以上设计图均在对应功能编码前生成。
 
-## v0.5.0 功能
+## v0.6.0 Windows 更新
+
+本次只发布 Windows 客户端，Android 安装包继续使用 v0.5.0。
+
+- 精简窗口贴近任一屏幕边缘，鼠标离开后收成只显示第一个当前任务的浮条；悬停或点击恢复到此前大小。顶部「贴边收起」按钮可关闭此行为。
+- 任务编辑器可选默认、颜色或本机图片背景；支持裁剪、比例、透明度与可复用的背景库。素材仅保存在当前电脑，不自动上传，也不包含在任务 JSON 备份内。
+- 每个子步骤可单独填写执行者，标记「正在做」「缩略显示」，支持多项并行。任务折叠后仍显示选中的未完成步骤；旧任务自动显示下一个未完成步骤。
+- 默认跟随系统切换暗黑 / 浅色，也可在设置中手动指定；精简窗口记住上次尺寸，顶部操作栏在空闲时隐藏，移到顶部即可出现。
+- API v1.1 支持子步骤的执行者与显示标记，保留原有接口和鉴权方式。
+
+编码前生成的 [Windows 设计稿](docs/design/dayweave-windows-v060.png) · [ImageGen 提示词](docs/design/windows-v060-prompts.md) · [使用与验证记录](docs/windows-v060.md)。
+
+## 已有功能
 
 - Android 原生安装包：弹性布局、系统返回键、键盘避让、系统文件选择与保存；[安装与构建说明](docs/android.md)。
 

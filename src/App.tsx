@@ -1,6 +1,12 @@
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { ArrowDownToLine, ArrowUpFromLine, Check, CheckCheck, ChevronDown, ChevronLeft, ChevronRight, Circle, Cloud, CloudOff, ExternalLink, Flag, Folder, House, ListTodo, LoaderCircle, Menu, MoreHorizontal, Paperclip, Plus, Search, Settings, Sparkles, Sprout, Star, Trash2, X } from 'lucide-react'
 import { cloud } from './cloud'
+import { Modal } from './Modal'
+import { TaskAppearance } from './TaskAppearance'
+import { initializeLooks, lookStyle, saveTaskLook, taskLook, useLooks } from './appearance'
+import { StepEditor, StepSummary } from './Steps'
+import { useTheme } from './theme'
+import { useCompactToolbar } from './useCompactToolbar'
 import { EmailOtpForm } from './EmailOtpForm'
 import { AssigneePicker } from './AssigneePicker'
 import { ApiKeys } from './ApiKeys'
@@ -12,29 +18,24 @@ import { useWindowMode } from './useWindowMode'
 import { useAndroidBack, useMobileViewport } from './useMobile'
 import { android } from './platform'
 import { copyGuestTasks, exampleTasks, importTasks, initialize, moveTask, patchTask, resolveConflict, saveTask, syncNow, useTasks } from './store'
-import { dateKey, newTask, parseDate, priorityLabels, safeLink, shiftDate, kindLabels, statusLabels, taskKind, taskOrder, uuid, type LocalRecord, type Status, type Task, type TaskKind } from './model'
+import { dateKey, newTask, parseDate, priorityLabels, safeLink, shiftDate, kindLabels, statusLabels, summarySteps, taskKind, taskOrder, uuid, type LocalRecord, type Status, type Task, type TaskKind } from './model'
 
 type View = 'day' | 'all' | 'done' | 'trash'
 const navItems = [{ id: 'day' as const, label: '我的一天', icon: House }, { id: 'all' as const, label: '全部任务', icon: ListTodo }, { id: 'done' as const, label: '已结束', icon: CheckCheck }]
 const weekdays = ['日', '一', '二', '三', '四', '五', '六']
 
-function Modal({ title, children, close, wide = false }: { title: string; children: ReactNode; close: () => void; wide?: boolean }) {
-  const ref = useRef<HTMLDialogElement>(null)
-  const id = useId()
-  useEffect(() => { ref.current?.showModal(); return () => { ref.current?.close() } }, [])
-  return <dialog ref={ref} className={'modal ' + (wide ? 'wide' : '')} aria-labelledby={id} onCancel={e => { e.preventDefault(); close() }} onClick={e => { if (e.target === ref.current) close() }}>
-    <div className="modal-heading"><h2 id={id}>{title}</h2><button className="icon-button" aria-label="关闭窗口" onClick={close}><X size={20} /></button></div>{children}
-  </dialog>
-}
-
 function TaskEditor({ initial, close, saved, assignees }: { initial: Task; close: () => void; saved: () => void; assignees: string[] }) {
+  const { scope } = useTasks()
+  const looks = useLooks()
+  const [look, setLook] = useState(() => taskLook(scope, initial.id))
+  useEffect(() => { if (looks.ready) setLook(taskLook(scope, initial.id)) }, [looks.ready, scope, initial.id])
   const [task, setTask] = useState(initial)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const set = <K extends keyof Task>(key: K, value: Task[K]) => setTask(t => ({ ...t, [key]: value }))
   const submit = async (e: FormEvent) => {
     e.preventDefault(); if (busy) return; setBusy(true); setError('')
-    try { await saveTask({ ...task, assignee: task.assignee.trim() || '自己', project: task.project.trim(), link: task.link.trim(), steps: task.steps.filter(s => s.title.trim()) }); saved(); close() }
+    try { await saveTask({ ...task, assignee: task.assignee.trim() || '自己', project: task.project.trim(), link: task.link.trim(), steps: task.steps.filter(s => s.title.trim()) }); if (!android && looks.ready) await saveTaskLook(scope, task.id, look); saved(); close() }
     catch (e) { setError(e instanceof Error ? e.message : '保存失败，请重试') }
     finally { setBusy(false) }
   }
@@ -47,7 +48,8 @@ function TaskEditor({ initial, close, saved, assignees }: { initial: Task; close
       <label>项目 / 标签<input maxLength={80} placeholder="例如：研究论文、个人事务" value={task.project} onChange={e => set('project', e.target.value)} /></label>
       <label>备注<textarea maxLength={20000} rows={3} placeholder="补充背景、交付标准，或下次继续的位置…" value={task.note} onChange={e => set('note', e.target.value)} /></label>
       <div className="field-heading"><span>子步骤 <small>把大任务拆小一点</small></span><button type="button" className="text-button" onClick={() => set('steps', [...task.steps, { id: uuid(), title: '', done: false }])} disabled={task.steps.length >= 200}><Plus size={14} /> 添加步骤</button></div>
-      <div className="edit-steps">{task.steps.map((step, i) => <div key={step.id}><input aria-label={'子步骤 ' + (i + 1)} maxLength={500} placeholder="一个明确的小步骤" value={step.title} onChange={e => set('steps', task.steps.map(s => s.id === step.id ? { ...s, title: e.target.value } : s))} /><button type="button" className="icon-button" aria-label={'移除子步骤 ' + (i + 1)} onClick={() => set('steps', task.steps.filter(s => s.id !== step.id))}><X size={16} /></button></div>)}</div>
+      {!android ? <StepEditor steps={task.steps} change={value => set('steps', value)} assignees={assignees} /> : <div className="edit-steps">{task.steps.map((step, i) => <div key={step.id}><input aria-label={'子步骤 ' + (i + 1)} maxLength={500} placeholder="一个明确的小步骤" value={step.title} onChange={e => set('steps', task.steps.map(s => s.id === step.id ? { ...s, title: e.target.value } : s))} /><button type="button" className="icon-button" aria-label={'移除子步骤 ' + (i + 1)} onClick={() => set('steps', task.steps.filter(s => s.id !== step.id))}><X size={16} /></button></div>)}</div>}
+      {!android && looks.ready && <TaskAppearance value={look} change={setLook} />}
       <label>关联链接<input type="url" maxLength={2000} placeholder="https://…  关联 PR、Agent 对话或文档" value={task.link} onChange={e => set('link', e.target.value)} /></label>
       <div className="check-fields"><label><input type="checkbox" checked={task.starred} onChange={e => set('starred', e.target.checked)} /> 设为今日重点</label><label><input type="checkbox" checked={task.waiting} onChange={e => set('waiting', e.target.checked)} /> 等待反馈 / 人工验收</label></div>
       {error && <p className="error" role="alert">{error}</p>}
@@ -64,21 +66,24 @@ async function openLink(url: string) {
 }
 
 function TaskRow({ record, expanded, toggle, edit, act, showDate, dragControl, dragging, dropBefore }: { record: LocalRecord; expanded: boolean; toggle: () => void; edit: () => void; act: (work: Promise<unknown>, success?: string) => void; showDate: boolean; dragControl: ReactNode; dragging?: boolean; dropBefore?: boolean }) {
+  useLooks()
   const task = record.task
+  const look = android ? { kind: 'default' as const } : taskLook(record.scope, task.id)
   const kind = taskKind(task)
   const doneSteps = task.steps.filter(s => s.done).length
   const mutate = (fn: (t: Task) => Task, message?: string) => act(patchTask(task.id, fn), message)
   const complete = () => mutate(t => ({ ...t, status: t.status === 'done' ? 'todo' : 'done', waiting: false }), task.status === 'done' ? '任务已重新打开' : '又完成了一件事')
-  return <article className={'task-row task-kind-' + kind + ' ' + (task.status === 'done' ? 'is-done' : '') + (record.conflict ? ' has-conflict' : '') + (dragging ? ' is-dragged' : '') + (dropBefore ? ' drop-before' : '')} data-task-id={task.id} data-task-kind={kind} data-testid="task-row">
+  return <article className={'task-row ' + (look.kind === 'default' ? '' : look.kind + '-look ') + 'task-kind-' + kind + ' ' + (task.status === 'done' ? 'is-done' : '') + (record.conflict ? ' has-conflict' : '') + (dragging ? ' is-dragged' : '') + (dropBefore ? ' drop-before' : '')} style={lookStyle(look)} data-task-id={task.id} data-task-kind={kind} data-testid="task-row">
     <div className="task-main">{dragControl}<button className={'task-check ' + task.status} aria-label={(task.status === 'done' ? '重新打开：' : '完成：') + task.title} onClick={complete}>{task.status === 'done' && <Check size={14} />}</button><KindIcon kind={kind} />
       <button className="task-open" onClick={toggle} aria-expanded={expanded}><span className="task-title-line"><span className="task-title">{task.title}</span>{task.starred && <Star size={13} className="star-filled" />}</span>
         <span className="task-meta"><span className={'badge task-kind-label kind-' + kind}>{kindLabels[kind]}</span><span className={'badge ' + (task.assignee === '自己' ? 'self' : 'executor')}>{task.assignee === '自己' ? null : <Sparkles size={10} />}{task.assignee}</span>{task.project && <span className="project-tag"><Folder size={12} />{task.project}</span>}<span className={'badge priority-' + task.priority}>{priorityLabels[task.priority]}</span>{task.waiting && <span className="badge waiting">等待反馈</span>}{record.conflict && <span className="badge conflict">版本冲突</span>}</span>
       </button><div className="task-trailing">{(task.outputs?.length ?? 0) > 0 && <span className="output-count" title="任务产出"><Paperclip size={12} />{task.outputs.length}</span>}{showDate && <span className={'task-date ' + (task.date < dateKey() && task.status !== 'done' ? 'overdue' : '')}>{task.date.slice(5).replace('-', '/')}</span>}{task.steps.length > 0 && <span className="step-count">{doneSteps}/{task.steps.length}</span>}<button className={'icon-button chevron ' + (expanded ? 'open' : '')} aria-label={(expanded ? '折叠：' : '展开：') + task.title} onClick={toggle}><ChevronDown size={16} /></button></div>
     </div>
+    {!expanded && !android && <StepSummary task={task} />}
     {!expanded && task.note && <p className="task-preview">{task.note}</p>}
     {expanded && <div className="task-detail">
       {task.note && <p className="task-note">{task.note}</p>}
-      {task.steps.length > 0 && <div className="substeps">{task.steps.map(step => <label key={step.id} className={step.done ? 'checked' : ''}><input type="checkbox" checked={step.done} onChange={() => mutate(t => ({ ...t, steps: t.steps.map(s => s.id === step.id ? { ...s, done: !s.done } : s) }))} /><span>{step.title}</span></label>)}</div>}
+      {task.steps.length > 0 && <div className="substeps">{task.steps.map(step => <label key={step.id} className={step.done ? 'checked' : ''}><input type="checkbox" aria-label={step.title} checked={step.done} onChange={() => mutate(t => ({ ...t, steps: t.steps.map(s => s.id === step.id ? { ...s, done: !s.done, ...(s.active !== undefined ? { active: false } : {}) } : s) }))} /><span>{step.title}</span>{!android && step.assignee && <small className="step-assignee">{step.assignee}</small>}{!android && step.active && !step.done && <small className="step-in-progress">正在做</small>}</label>)}</div>}
       {task.link && <button className="link-button" onClick={() => act(openLink(task.link))}><ExternalLink size={13} />打开关联链接</button>}
       {record.conflict && <div className="conflict-box"><strong>另一台设备也修改了这个任务</strong><p>本机：{task.title} · {statusLabels[task.status]}<br />云端：{record.conflict.document.title} · {statusLabels[record.conflict.document.status]}</p><div className="row-actions"><button onClick={() => act(resolveConflict(task.id, 'both'), '两个版本都已保留')}>保留两个版本</button><button onClick={() => act(resolveConflict(task.id, 'local'))}>使用本机版本</button><button onClick={() => act(resolveConflict(task.id, 'remote'))}>使用云端版本</button></div></div>}
       <OutputPanel task={task} /><div className="task-detail-footer"><div className="row-actions">{!task.deletedAt && <><select aria-label={'更改状态：' + task.title} value={task.status} onChange={e => { const status = e.target.value as Status; mutate(t => ({ ...t, status })) }}>{Object.entries(statusLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select><button onClick={edit}>编辑</button><button onClick={() => mutate(t => ({ ...t, date: shiftDate(task.date, 1) }), '已安排到下一天')}>移至次日</button></>}{task.deletedAt ? <button onClick={() => mutate(t => ({ ...t, deletedAt: null }), '任务已恢复')}>恢复任务</button> : <button className="delete-action" aria-label={'删除：' + task.title} onClick={() => mutate(t => ({ ...t, deletedAt: new Date().toISOString() }), '已移入回收站，可在设置中恢复')}><Trash2 size={13} />删除</button>}</div><span className="local-indicator">{record.dirty ? '已存本机' : '已同步'}</span></div>
@@ -95,7 +100,7 @@ function MiniCalendar({ date, setDate }: { date: string; setDate: (value: string
   return <div className="mini-calendar"><div className="calendar-heading"><span>{first.getFullYear()} 年 {first.getMonth() + 1} 月</span><div><button className="icon-button" aria-label="上个月" onClick={() => monthMove(-1)}><ChevronLeft size={14} /></button><button className="icon-button" aria-label="下个月" onClick={() => monthMove(1)}><ChevronRight size={14} /></button></div></div><div className="calendar-grid">{['一', '二', '三', '四', '五', '六', '日'].map(w => <span className="weekday" key={w}>{w}</span>)}{Array.from({ length: 42 }, (_, i) => shiftDate(start, i)).map(day => <button key={day} className={(day === date ? 'selected ' : '') + (day.slice(0, 7) !== month ? 'other-month ' : '') + (day === dateKey() ? 'is-today' : '')} aria-label={day} aria-pressed={day === date} onClick={() => setDate(day)}>{parseDate(day).getDate()}</button>)}</div></div>
 }
 
-function Preferences({ close, act, showTrash }: { close: () => void; act: (p: Promise<unknown>, message?: string) => void; showTrash: () => void }) {
+function Preferences({ close, act, showTrash, theme }: { theme: ReturnType<typeof useTheme>; close: () => void; act: (p: Promise<unknown>, message?: string) => void; showTrash: () => void }) {
   const state = useTasks()
   const [message, setMessage] = useState('')
   const file = useRef<HTMLInputElement>(null)
@@ -122,7 +127,8 @@ function Preferences({ close, act, showTrash }: { close: () => void; act: (p: Pr
     </section>
     <section><div className="settings-title"><Folder size={18} /><h3>数据由你保管</h3></div><p className="muted">备份包含当前空间的全部任务及回收站，不包含登录信息。导入会添加副本。</p><div className="settings-actions"><button className="button secondary" onClick={() => act(exportData())}><ArrowDownToLine size={15} />导出备份</button><button className="button secondary" onClick={() => act(chooseBackup())}><ArrowUpFromLine size={15} />导入备份</button><button className="button secondary" onClick={showTrash}><Trash2 size={15} />回收站</button></div><input ref={file} type="file" accept=".json,application/json" hidden onChange={e => { const selected = e.target.files?.[0]; if (selected) act((async () => { if (selected.size > 20 * 1024 * 1024) throw new Error('备份文件不能超过 20 MB'); const count = await importTasks(await selected.text()); setMessage(`已添加 ${count} 个任务副本。`) })()); e.target.value = '' }} /></section>
     {state.email && cloud && <ApiKeys key={state.scope} scope={state.scope} />}
-    <section className="about"><Sprout size={21} /><div><strong>日序 <span>DAYWEAVE</span></strong><p>v0.5.0 · 给并行任务，留一点秩序。</p><small>Android · Windows · 网页 · 离线优先</small></div></section>
+    {!android && <section className="theme-settings"><div className="settings-title"><Sprout size={18} /><h3>外观</h3></div><label>颜色模式<select aria-label="颜色模式" value={theme.preference} onChange={e => theme.setPreference(e.target.value as typeof theme.preference)}><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">暗黑</option></select></label><p className="muted">默认跟随 Windows 的浅色或暗黑模式，变化时立即生效。</p></section>}
+    <section className="about"><Sprout size={21} /><div><strong>日序 <span>DAYWEAVE</span></strong><p>v0.6.0 · 给并行任务，留一点秩序。</p><small>Android · Windows · 网页 · 离线优先</small></div></section>
     {(message || state.error) && <p className="notice" role="status">{message || state.error}</p>}
     </div>
   </Modal>
@@ -130,6 +136,7 @@ function Preferences({ close, act, showTrash }: { close: () => void; act: (p: Pr
 
 export default function App() {
   useMobileViewport()
+  const theme = useTheme()
   const state = useTasks()
   const [view, setView] = useState<View>('day')
   const [date, setDate] = useState(dateKey())
@@ -154,6 +161,8 @@ export default function App() {
   }, [sidebar, view])
   useAndroidBack(closeMobileLayer, setToast)
   const windowMode = useWindowMode(setToast)
+  const toolbar = useCompactToolbar(windowMode.compact)
+  useEffect(() => { if (!android) void initializeLooks().catch(() => setToast('本机背景库无法读取，请检查可用磁盘空间')) }, [])
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [collapsed, setCollapsed] = useState<Set<Status>>(() => { try { return new Set(JSON.parse(localStorage.getItem('dayweave-collapsed') || '[]')) } catch { return new Set() } })
   const searchRef = useRef<HTMLInputElement>(null)
@@ -180,16 +189,19 @@ export default function App() {
     if (view === 'trash' ? !t.deletedAt : !!t.deletedAt) return false
     if (view === 'day' && t.date !== date) return false
     if (view === 'done' && t.status !== 'done') return false
-    if (assignee !== 'all' && t.assignee !== assignee) return false
+    if (assignee !== 'all' && t.assignee !== assignee && !t.steps.some(s => s.assignee === assignee)) return false
     if (kindFilter !== 'all' && taskKind(t) !== kindFilter) return false
-    return !search.trim() || [t.title, t.note, t.project, t.assignee, ...t.steps.map(s => s.title)].join(' ').toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())
+    return !search.trim() || [t.title, t.note, t.project, t.assignee, ...t.steps.flatMap(s => [s.title, s.assignee ?? ''])].join(' ').toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())
   }).sort((a, b) => taskOrder(a.task) - taskOrder(b.task))
   const focus = todayTasks.filter(r => r.task.status !== 'done').sort((a, b) => Number(b.task.starred) - Number(a.task.starred) || Number(b.task.priority === 'high') - Number(a.task.priority === 'high'))[0]?.task
   const overdue = tasks.filter(r => r.task.date < dateKey() && r.task.status !== 'done')
   const weekStart = shiftDate(date, -((parseDate(date).getDay() + 6) % 7))
   const heading = view === 'day' ? '把今天，理出头绪。' : view === 'all' ? '每件事，都有着落。' : view === 'trash' ? '留一点，反悔的余地。' : '做完的事，值得回望。'
   const progress = todayTasks.length ? Math.round(todayDone / todayTasks.length * 100) : 0
-  return <div className={"app-shell " + (windowMode.compact ? "compact-mode " : "") + (compactFilters ? "compact-filters-open " : "") + (windowMode.native ? "native-window" : "")}>
+  const assignees = [...new Set(tasks.flatMap(r => [r.task.assignee, ...r.task.steps.map(s => s.assignee ?? '')]).filter(Boolean))].sort()
+  const railTask = tasks.filter(r => r.task.date === state.today && r.task.status !== 'done').sort((a,b) => Number(a.task.status !== 'doing') - Number(b.task.status !== 'doing') || taskOrder(a.task) - taskOrder(b.task))[0]?.task
+  if (windowMode.dock.collapsed) return <div className={'edge-rail edge-' + windowMode.dock.edge}><button aria-label="展开贴边浮窗" title="悬停或点击展开任务列表" onPointerEnter={() => void windowMode.dock.expand()} onFocus={() => void windowMode.dock.expand()} onClick={() => void windowMode.dock.expand()}><span className="rail-status"><i />{railTask ? statusLabels[railTask.status] : '日序'}</span><strong>{railTask?.title || '今天，留一点秩序'}</strong><small>{railTask ? summarySteps(railTask)[0]?.title || railTask.assignee : '悬停展开'}</small></button></div>
+  return <div className={"app-shell " + (windowMode.compact ? "compact-mode " : "") + (compactFilters ? "compact-filters-open " : "") + (toolbar.visible ? "toolbar-visible " : "") + (windowMode.native ? "native-window" : "")}>
     {sidebar && <div className="sidebar-scrim" onClick={() => setSidebar(false)} />}
     <aside className={'sidebar ' + (sidebar ? 'visible' : '')}>
       <button className="brand" onClick={() => selectDate(dateKey())} aria-label="日序，返回今天"><span className="brand-symbol"><CheckCheck size={22} /></span><span><strong>日序</strong><small>DAYWEAVE</small></span></button>
@@ -199,10 +211,10 @@ export default function App() {
       <div className="sidebar-note"><Sprout size={19} /><p>不必同时做完所有事，<br />只要清楚下一步。</p></div>
       <div className="sidebar-bottom"><button onClick={() => setSettings(true)} className="sync-button">{!state.online ? <CloudOff size={18} /> : <Cloud size={18} />}<span>{!state.online ? '离线 · 本机保存' : state.email ? state.syncing ? '正在同步' : state.error ? '同步待重试' : pendingSync ? `${pendingSync} 项待同步` : '云端已同步' : '本机模式'}</span><i className={state.email && !state.error && state.online ? 'connected' : ''} /></button><button onClick={() => setSettings(true)}><Settings size={18} /><span>设置与同步</span><MoreHorizontal size={16} /></button><div className="profile"><span>{state.email ? state.email.charAt(0).toUpperCase() : '我'}</span><div><strong>{state.email ? state.email.split('@')[0] : '我的日序'}</strong><small>{state.email ? '个人云空间' : '离线也能安心记录'}</small></div></div></div>
     </aside>
-    <div className="workspace"><header className="topbar" data-tauri-drag-region={windowMode.native ? "deep" : undefined}><div><button className="icon-button mobile-menu" aria-label="打开侧栏" onClick={() => setSidebar(true)}><Menu size={20} /></button><span className="breadcrumb">个人空间 <ChevronRight size={12} /> <strong>{view === 'trash' ? '回收站' : navItems.find(x => x.id === view)?.label}</strong></span></div><div className="topbar-right">{windowMode.controls}<span className="today-label">{new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }).format(new Date())}</span><button className="icon-button" aria-label="打开设置" onClick={() => setSettings(true)}><Settings size={17} /></button>{windowMode.frameControls}</div></header>
+    <div className="workspace">{windowMode.compact && <button className="toolbar-sensor" aria-label="显示窗口工具栏" onPointerEnter={toolbar.enter} onPointerLeave={toolbar.leave} onFocus={toolbar.focus} onClick={toolbar.reveal} />}<header onPointerEnter={toolbar.enter} onPointerLeave={toolbar.leave} onFocus={toolbar.focus} onBlur={toolbar.blur} className="topbar" data-tauri-drag-region={windowMode.native ? "deep" : undefined}><div><button className="icon-button mobile-menu" aria-label="打开侧栏" onClick={() => setSidebar(true)}><Menu size={20} /></button><span className="breadcrumb">个人空间 <ChevronRight size={12} /> <strong>{view === 'trash' ? '回收站' : navItems.find(x => x.id === view)?.label}</strong></span></div><div className="topbar-right">{windowMode.controls}<span className="today-label">{new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }).format(new Date())}</span><button className="icon-button" aria-label="打开设置" onClick={() => setSettings(true)}><Settings size={17} /></button>{windowMode.frameControls}</div></header>
       <div className="workspace-body"><main className="main-content">{windowMode.compact && <div className="compact-summary"><div><strong data-tauri-drag-region>日序 · {date.slice(5).replace("-", "月")}日</strong><small>{todayTasks.filter(r => r.task.status === "doing").length} 进行中 · {todayTasks.filter(r => r.task.status === "todo").length} 待办</small></div><div className="compact-summary-actions"><button className="icon-button compact-filter-toggle" aria-label="筛选任务" aria-expanded={compactFilters} onClick={() => setCompactFilters(v => !v)}><Search size={16} /></button><button className="icon-button" aria-label="新建任务" onClick={() => createTask()}><Plus size={19} /></button></div></div>}<div className="page-heading"><div><div className="eyebrow">A LITTLE ORDER, EVERY DAY</div><h1>{heading}</h1><p>{view === 'day' ? `${parseDate(date).getMonth() + 1}月${parseDate(date).getDate()}日，星期${weekdays[parseDate(date).getDay()]} · ${date === dateKey() ? '从容开启今天' : '提前安排，也能回顾过去'}` : view === 'trash' ? '删除的任务仍保留在这里，可以随时恢复。' : view === 'done' ? `已经完成 ${tasks.filter(r => r.task.status === 'done').length} 件事，继续按自己的节奏前进。` : `${tasks.length} 个任务，一处掌握所有进展。`}</p></div><button className="button primary new-task" aria-label="新建任务" onClick={() => createTask()} disabled={!state.ready}><Plus size={17} /><span>新建任务</span><kbd>N</kbd></button></div>
       {view === 'day' && <div className="week-strip"><button className="icon-button week-prev" aria-label="上一周" onClick={() => setDate(shiftDate(date, -7))}><ChevronLeft size={17} /></button>{Array.from({ length: 7 }, (_, i) => shiftDate(weekStart, i)).map(day => <button className={'week-day ' + (date === day ? 'selected' : '')} key={day} onClick={() => setDate(day)} aria-label={'选择日期 ' + day} aria-pressed={date === day}><span>周{weekdays[parseDate(day).getDay()]}</span><strong>{parseDate(day).getDate()}</strong><i className={tasks.some(r => r.task.date === day && r.task.status !== 'done') ? 'has-tasks' : ''} /></button>)}<button className="icon-button" aria-label="下一周" onClick={() => setDate(shiftDate(date, 7))}><ChevronRight size={17} /></button></div>}
-      <div className="list-toolbar"><div className="search-input"><Search size={16} /><input ref={searchRef} aria-label="搜索任务" placeholder="搜索任务、项目或步骤" value={search} onChange={e => setSearch(e.target.value)} />{search ? <button className="icon-button" aria-label="清空搜索" onClick={() => setSearch('')}><X size={14} /></button> : <kbd>/</kbd>}</div><select aria-label="筛选执行者" value={assignee} onChange={e => setAssignee(e.target.value)}><option value="all">全部执行者</option>{[...new Set(tasks.map(r => r.task.assignee))].sort().map(a => <option key={a}>{a}</option>)}</select><button className="icon-button" aria-label="跳转到今天" title="跳转到今天" onClick={() => selectDate(dateKey())}><House size={16} /></button></div>
+      <div className="list-toolbar"><div className="search-input"><Search size={16} /><input ref={searchRef} aria-label="搜索任务" placeholder="搜索任务、项目或步骤" value={search} onChange={e => setSearch(e.target.value)} />{search ? <button className="icon-button" aria-label="清空搜索" onClick={() => setSearch('')}><X size={14} /></button> : <kbd>/</kbd>}</div><select aria-label="筛选执行者" value={assignee} onChange={e => setAssignee(e.target.value)}><option value="all">全部执行者</option>{assignees.map(a => <option key={a}>{a}</option>)}</select><button className="icon-button" aria-label="跳转到今天" title="跳转到今天" onClick={() => selectDate(dateKey())}><House size={16} /></button></div>
       <KindFilter value={kindFilter} change={setKindFilter} />
       {state.error && <div className="banner error-banner" role="status"><CloudOff size={16} /><span>{state.error}。任务已保存在本机。</span><button onClick={() => act(syncNow())}>重试</button></div>}
       {conflicts > 0 && <div className="banner"><Flag size={16} /><span>{conflicts} 个任务存在版本冲突。展开任务可选择保留方式。</span></div>}
@@ -212,6 +224,6 @@ export default function App() {
       <aside className="focus-panel"><div className="eyebrow">ONE STEP AT A TIME</div><h2>专注当下</h2><div className="progress-ring"><svg viewBox="0 0 160 160" aria-label={`所选日期完成进度 ${progress}%`} role="img"><circle cx="80" cy="80" r="68" className="ring-bg" /><circle cx="80" cy="80" r="68" className="ring-value" strokeDasharray={`${progress * 4.2726} 427.26`} /></svg><div><strong>{todayDone}<span> / {todayTasks.length}</span></strong><small>{date === dateKey() ? '今日' : '所选日期'}进度</small></div></div><p className="focus-caption">给并行任务，留一点秩序。</p><div className="focus-divider" /><div className="focus-label"><Star size={14} />下一件重要的事</div>{focus ? <button className="focus-card" onClick={() => { setView('day'); setSearch(''); setAssignee('all'); setKindFilter('all'); setExpanded(new Set([focus.id])); setCollapsed(current => new Set([...current].filter(s => s !== focus.status))) }}><span className="focus-title"><Circle size={17} />{focus.title}</span><span className="task-meta"><span className={'badge priority-' + focus.priority}>{priorityLabels[focus.priority]}</span><span>{focus.assignee}</span></span>{focus.steps.length > 0 && <small>{focus.steps.filter(s => s.done).length} / {focus.steps.length} 个步骤</small>}</button> : <div className="focus-empty"><Sprout size={24} /><p>{todayTasks.length ? '今天安排的事都完成了。' : '先为这一天安排一件事吧。'}</p></div>}
       <div className="parallel-summary"><div><span className="summary-dot" /><span>并行进行</span><strong>{doing.length}</strong></div><div><span className="summary-dot amber" /><span>等待反馈</span><strong>{waiting.length}</strong></div></div><div className="quiet-note"><span>慢慢来，也很快。</span><p>开始一件事之前，<br />先给正在做的事一个位置。</p><Sprout size={40} strokeWidth={1} /></div><div className="shortcuts"><div><kbd>N</kbd><span>新建任务</span></div><div><kbd>/</kbd><span>快速搜索</span></div><div><kbd>Ctrl ↵</kbd><span>保存编辑</span></div></div></aside></div>
     </div><nav className="mobile-nav" aria-label="手机导航">{navItems.slice(0, 3).map(item => <button key={item.id} className={view === item.id ? 'active' : ''} onClick={() => { navigate(item.id); if (item.id === 'day') setDate(dateKey()) }}><item.icon size={19} /><span>{item.id === 'day' ? '今天' : item.id === 'all' ? '全部' : '已结束'}</span></button>)}<button onClick={() => setSettings(true)}><Settings size={19} /><span>设置</span></button></nav>
-    {taskDrag.overlay}{editor && <TaskEditor initial={editor} assignees={state.records.map(r => r.task.assignee)} close={() => setEditor(null)} saved={() => setToast('任务已保存')} />}{settings && <Preferences close={() => setSettings(false)} act={act} showTrash={() => { navigate('trash'); setSettings(false) }} />}{toast && <div className="toast" role="status"><Check size={15} /><span>{toast}</span><button aria-label="关闭提示" onClick={() => setToast('')}><X size={14} /></button></div>}
+    {taskDrag.overlay}{editor && <TaskEditor initial={editor} assignees={assignees} close={() => setEditor(null)} saved={() => setToast('任务已保存')} />}{settings && <Preferences theme={theme} close={() => setSettings(false)} act={act} showTrash={() => { navigate('trash'); setSettings(false) }} />}{toast && <div className="toast" role="status"><Check size={15} /><span>{toast}</span><button aria-label="关闭提示" onClick={() => setToast('')}><X size={14} /></button></div>}
   </div>
 }

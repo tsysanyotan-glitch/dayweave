@@ -60,6 +60,16 @@ PATCH 仅传要改的字段即可。`steps` 按整个数组替换：更改一步
 
 ## 4. 版本冲突与重试
 
+v1.1 新增可选子步骤字段（Windows v0.6.0）：`assignee`（最多 80 字，留空沿用任务执行者）、`active`（正在做）、`showInSummary`（在折叠行显示）。多个步骤可同时为 true；已完成步骤不会出现在折叠摘要中。示例：
+
+```json
+{"steps":[{"id":"step-a","title":"界面开发","done":false,"assignee":"codex","active":true,"showInSummary":true},{"id":"step-b","title":"查阅资料","done":false,"assignee":"自己","active":true,"showInSummary":true}]}
+```
+
+`steps` 仍是整组替换，提交时保留其他步骤及其可选字段。明确清空标记请传 `false`，清空执行者请传空字符串。任务背景、裁剪素材、颜色模式和窗口尺寸是当前电脑的设置，不进入 API 文档或任务云端数据。
+
+早期客户端（含 Android v0.5.0）只识别基础步骤字段；旧版编辑可能省略新增字段。Windows 会为本机已知、ID 未变的步骤保留这些标签，但新设备不能恢复云端已经被旧版覆盖的标记。需要管理并行步骤时请在 Windows v0.6.0 操作。
+
 每次 POST / PATCH / DELETE 都必须带 `Idempotency-Key: <新的 UUID>`。同一次操作因网络中断而重试时，复用同一个 UUID、路径和请求体；新操作换一个 UUID。相同任务最后一次写入的重试返回原结果，不重复创建或修改；该任务后来被别人修改后，旧请求返回 409，不能无限期重放。
 
 PATCH / DELETE 还必须带 `If-Match: <最近读取的 revision>`，例如 `If-Match: 3` 或 `If-Match: "3"`。网关可能返回 `ETag: W/"3"`，同样可以原样传入 If-Match；这里按数字版本比较。版本已变化会返回 409；重新 GET 并合并修改，再以新 revision 和新幂等 UUID 提交，避免覆盖客户端或另一服务的更新。不要盲目循环覆盖。

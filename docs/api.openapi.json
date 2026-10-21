@@ -1,6 +1,6 @@
 {
   "openapi": "3.1.0",
-  "info": {"title":"DayWeave 个人任务 API","version":"1.0.0","description":"在客户端设置中创建个人密钥；仅访问密钥所属账号。每个密钥每分钟最多 60 次请求。写入使用版本检查及幂等 UUID。本机文件内容和路径不通过 API 传输。"},
+  "info": {"title":"DayWeave 个人任务 API","version":"1.1.0","description":"在客户端设置中创建个人密钥；仅访问密钥所属账号。每个密钥每分钟最多 60 次请求。写入使用版本检查及幂等 UUID。本机文件内容和路径不通过 API 传输。"},
   "servers": [{"url":"https://gacbkkhanzgbvrfwycji.supabase.co/functions/v1/dayweave-api"}],
   "security": [{"personalKey":[]}],
   "paths": {
@@ -39,7 +39,7 @@
       "Error":{"description":"错误；429 时 Retry-After: 60。所有响应附 X-Request-Id。","content":{"application/json":{"schema":{"type":"object","properties":{"error":{"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"}}},"requestId":{"type":"string","format":"uuid"}}}}}}
     },
     "schemas": {
-      "Step":{"type":"object","required":["id","title","done"],"properties":{"id":{"type":"string"},"title":{"type":"string","minLength":1,"maxLength":500},"done":{"type":"boolean"}}},
+      "Step":{"type":"object","required":["id","title","done"],"properties":{"id":{"type":"string"},"title":{"type":"string","minLength":1,"maxLength":500},"done":{"type":"boolean"},"assignee":{"type":"string","maxLength":80,"description":"子步骤执行者；留空时沿用任务执行者"},"active":{"type":"boolean","description":"正在做，允许多个步骤同时为 true；done 后归为 false"},"showInSummary":{"type":"boolean","description":"缩略行显示；已完成步骤不会显示。未配置任何选择时自动显示第一个未完成步骤"}}},
       "TaskWrite":{"type":"object","description":"只接受以下字段，POST 额外接受 id。未知字段返回 400。outputs、用户 ID、路径和系统时间不可写。","properties":{"title":{"type":"string","minLength":1,"maxLength":300},"note":{"type":"string","maxLength":20000,"default":""},"date":{"type":"string","format":"date"},"status":{"type":"string","enum":["todo","doing","done"],"default":"todo"},"kind":{"type":"string","enum":["planned","issue"],"default":"planned"},"priority":{"type":"string","enum":["high","medium","low"],"default":"medium"},"assignee":{"type":"string","maxLength":2000,"default":"自己"},"project":{"type":"string","maxLength":2000},"link":{"type":"string","maxLength":2000,"description":"空字符串或 http(s) URL"},"waiting":{"type":"boolean","default":false},"starred":{"type":"boolean","default":false},"steps":{"type":"array","maxItems":200,"items":{"$ref":"#/components/schemas/Step"}},"order":{"type":"number","minimum":-10000000000000000,"maximum":10000000000000000}}},
       "Task":{"allOf":[{"$ref":"#/components/schemas/TaskWrite"},{"type":"object","required":["id","title","date","status","steps","outputs","createdAt","updatedAt","deletedAt"],"properties":{"id":{"type":"string","format":"uuid"},"createdAt":{"type":"string","format":"date-time"},"updatedAt":{"type":"string","format":"date-time"},"deletedAt":{"type":["string","null"],"format":"date-time"},"outputs":{"type":"array","description":"只读产出元数据，不含本机路径和文件内容","items":{"type":"object","properties":{"id":{"type":"string"},"name":{"type":"string"},"kind":{"type":"string","enum":["file","folder"]},"size":{"type":"integer"},"cloudPath":{"type":"string"}}}}}}]},
       "TaskResult":{"type":"object","required":["task","revision"],"properties":{"task":{"$ref":"#/components/schemas/Task"},"revision":{"type":"integer","minimum":1}}},
