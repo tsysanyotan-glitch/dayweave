@@ -7,7 +7,9 @@
 .deadline-fields{min-width:0;border:1px solid var(--edge,#dfe7d8);border-radius:8px;padding:14px;margin:0}
 .deadline-fields legend{font-size:12px;color:var(--subtle,#7e8b75);padding:0 5px}
 .deadline-fields small{font-size:11px;color:var(--subtle,#7e8b75)}
-.deadline-fields input,.quick-alarm input{min-width:0;width:100%;color-scheme:inherit}
+.deadline-fields .form-grid{min-width:0;grid-template-columns:repeat(2,minmax(0,1fr))}
+.deadline-fields label{min-width:0;max-width:100%}
+.deadline-fields input,.quick-alarm input{min-width:0;width:100%;max-width:100%;color-scheme:inherit}
 .kind-picker>div:has(.kind-alarm){grid-template-columns:repeat(3,minmax(0,1fr))}
 .kind-filter.kind-alarm[aria-pressed=true],.editor .kind-choice.kind-alarm.selected{background:#efe8fa;border-color:#9b7dcb;color:#754bb0}
 .alarm-intro{display:flex;align-items:center;gap:15px;color:#8662bd}
