@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { desktop } from './platform'
 import { clampRect, dockRect, inside, nearestEdge, type Edge, type Rect } from './windowGeometry'
 interface Anchor { edge: Edge; rect: Rect; inner: { width: number; height: number }; area: Rect; scale: number }
+// Even an undecorated resizable Windows window can have an invisible native
+// frame. Geometry and hover use outer bounds; setSize receives the inner size.
+const frameSize = (saved: Anchor) => ({ width: Math.max(0,saved.rect.width-saved.inner.width), height: Math.max(0,saved.rect.height-saved.inner.height) })
 export function useEdgeDock(compact: boolean, ready: boolean, changing: RefObject<boolean>, report: (message: string) => void, reminders = 0) {
   const [enabled, setEnabled] = useState(() => localStorage.getItem('dayweave-edge-dock') !== 'false')
   const [edge, setEdge] = useState<Edge | null>(null)
@@ -18,9 +21,9 @@ export function useEdgeDock(compact: boolean, ready: boolean, changing: RefObjec
       const { getCurrentWindow, LogicalSize, PhysicalSize, PhysicalPosition } = await import('@tauri-apps/api/window'); const win = getCurrentWindow()
       if (small && (await win.isMaximized() || await win.isMinimized() || document.querySelector('dialog[open]'))) return
       if (small) {
-        const rect = dockRect(saved.rect, saved.area, saved.edge, saved.scale, reminders)
+        const frame = frameSize(saved), rect = dockRect(saved.rect, saved.area, saved.edge, saved.scale, reminders, frame)
         collapsedRef.current = true; setCollapsed(true)
-        await win.setMinSize(new LogicalSize(48, 48)); await win.setSize(new PhysicalSize(rect.width, rect.height)); await win.setPosition(new PhysicalPosition(rect.x, rect.y))
+        await win.setMinSize(new LogicalSize(48, 48)); await win.setSize(new PhysicalSize(rect.width-frame.width, rect.height-frame.height)); await win.setPosition(new PhysicalPosition(rect.x, rect.y))
       } else {
         const rect = clampRect(saved.rect, saved.area)
         await win.setSize(new PhysicalSize(saved.inner.width, saved.inner.height)); await win.setPosition(new PhysicalPosition(rect.x, rect.y)); await win.setMinSize(new LogicalSize(280, 260))
@@ -62,7 +65,7 @@ export function useEdgeDock(compact: boolean, ready: boolean, changing: RefObjec
         void (async () => {
           const current = anchor.current!; const cursor = await api.cursorPosition()
           if (disposed || changing.current || anchor.current !== current) return
-          const rect = collapsedRef.current ? dockRect(current.rect, current.area, current.edge, current.scale, reminders) : current.rect
+          const rect = collapsedRef.current ? dockRect(current.rect, current.area, current.edge, current.scale, reminders, frameSize(current)) : current.rect
           const hovering = inside(cursor, rect)
           if (collapsedRef.current) { if (hovering) await resizeDock(false); return }
           if (hovering || document.querySelector('dialog[open]') || document.activeElement?.matches('input,textarea,select,[contenteditable=true]')) { leaveAt.current = 0; return }
@@ -78,7 +81,7 @@ export function useEdgeDock(compact: boolean, ready: boolean, changing: RefObjec
   useEffect(() => {
     if (!desktop || !collapsedRef.current || !anchor.current) return
     const saved=anchor.current
-    void (async()=>{const {getCurrentWindow,PhysicalSize,PhysicalPosition}=await import('@tauri-apps/api/window');const rect=dockRect(saved.rect,saved.area,saved.edge,saved.scale,reminders);const win=getCurrentWindow();await win.setSize(new PhysicalSize(rect.width,rect.height));await win.setPosition(new PhysicalPosition(rect.x,rect.y))})().catch(e=>report(String(e)))
+    void (async()=>{const {getCurrentWindow,PhysicalSize,PhysicalPosition}=await import('@tauri-apps/api/window');const frame=frameSize(saved),rect=dockRect(saved.rect,saved.area,saved.edge,saved.scale,reminders,frame);const win=getCurrentWindow();await win.setSize(new PhysicalSize(rect.width-frame.width,rect.height-frame.height));await win.setPosition(new PhysicalPosition(rect.x,rect.y))})().catch(e=>report(String(e)))
   },[reminders,report])
   return { enabled, setEnabled, edge, collapsed, collapsedRef, expand: () => resizeDock(false), release }
 }

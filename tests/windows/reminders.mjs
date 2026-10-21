@@ -77,11 +77,12 @@ try{
  await invoke('plugin:window|set_position',{label:'main',value:{Physical:{x:monitor.workArea.position.x+monitor.workArea.size.width-size.width,y:monitor.workArea.position.y+180}}})
  await expect(page.getByLabel('最近截止提醒',{exact:true})).toBeVisible({timeout:10000})
  await expect(page.locator('.rail-upcoming-item')).toHaveCount(3)
+ await expect.poll(()=>page.evaluate(()=>Math.abs(innerWidth-76))).toBeLessThan(2)
  expect(await page.locator('.rail-clock').evaluate(el=>el.getBoundingClientRect().bottom<=innerHeight)).toBe(true)
  await page.screenshot({path:'artifacts/windows-v070-rail.png'})
  checks.push('Three upcoming task deadlines fit between the current task and Beijing clock in the native rail')
  const area=monitor.workArea,center={x:area.position.x+area.size.width/2,y:area.position.y+area.size.height/2}
- const expand=async()=>{const p=await invoke('plugin:window|outer_position',{label:'main'}),s=await invoke('plugin:window|outer_size',{label:'main'});cursor(p.x+s.width/2,p.y+s.height/2);await expect(page.locator('.app-shell')).toBeVisible();await invoke('plugin:window|set_position',{label:'main',value:{Physical:{x:area.position.x+200,y:area.position.y+200}}});cursor(center.x,center.y)}
+ const expand=async()=>{const p=await invoke('plugin:window|outer_position',{label:'main'}),s=await invoke('plugin:window|outer_size',{label:'main'});cursor(p.x+s.width/2,p.y+s.height/2);await expect(page.locator('.app-shell')).toBeVisible({timeout:10000});await invoke('plugin:window|set_position',{label:'main',value:{Physical:{x:area.position.x+200,y:area.position.y+200}}});cursor(center.x,center.y)}
  await expand()
  await invoke('desktop_settings',{settings:{...(await invoke('desktop_snapshot')).settings,railCount:5}})
  for(const edge of ['left','right','top','bottom']){
@@ -91,6 +92,8 @@ try{
   const y=edge==='top'?area.position.y:edge==='bottom'?area.position.y+area.size.height-s.height:area.position.y+180
   cursor(center.x,center.y);await invoke('plugin:window|set_position',{label:'main',value:{Physical:{x,y}}})
   await expect(page.locator('.edge-'+edge+' .rail-upcoming-item')).toHaveCount(5,{timeout:10000})
+  await expect.poll(()=>page.evaluate(expected=>Math.abs(innerWidth-expected),edge==='left'||edge==='right'?76:680)).toBeLessThan(2)
+  await expect.poll(async()=>{const p=await invoke('plugin:window|outer_position',{label:'main'}),s=await invoke('plugin:window|outer_size',{label:'main'});return Math.abs(edge==='left'?p.x-area.position.x:edge==='right'?p.x+s.width-area.position.x-area.size.width:edge==='top'?p.y-area.position.y:p.y+s.height-area.position.y-area.size.height)}).toBeLessThan(2)
   await expect.poll(()=>page.evaluate(()=>[...document.querySelectorAll('.rail-upcoming-item,.rail-clock')].every(el=>{const b=el.getBoundingClientRect();return b.left>=0&&b.top>=0&&b.right<=innerWidth&&b.bottom<=innerHeight}))).toBe(true)
   if(edge==='top')await page.screenshot({path:'artifacts/windows-v070-rail-five.png'})
  }

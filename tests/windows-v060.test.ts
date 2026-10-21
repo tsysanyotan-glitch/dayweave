@@ -59,6 +59,15 @@ describe('crop coordinates', () => {
   })
 })
 describe('window geometry and remembered sizes', () => {
+  it('includes the native invisible frame while keeping reminders and clock inside each work-area edge', () => {
+    const area={x:-1920,y:-100,width:1920,height:1040},rect={x:-600,y:100,width:500,height:700},frame={width:16,height:16}
+    for(const edge of ['left','right','top','bottom'] as const) for(const count of [1,3,5]) {
+      const rail=dockRect(rect,area,edge,1.75,count,frame)
+      expect(clampRect(rail,area)).toEqual(rail)
+      expect(edge==='left'?rail.x-area.x:edge==='right'?rail.x+rail.width-area.x-area.width:edge==='top'?rail.y-area.y:rail.y+rail.height-area.y-area.height).toBe(0)
+      expect(rail.width-frame.width).toBe(Math.round((edge==='left'||edge==='right'?76:280+count*80)*1.75))
+    }
+  })
   it('uses first-run defaults, validates storage and preserves custom sizes', () => {
     expect(compactSize(null)).toEqual({ width: 380, height: 620 })
     expect(compactSize('{broken')).toEqual({ width: 380, height: 620 })

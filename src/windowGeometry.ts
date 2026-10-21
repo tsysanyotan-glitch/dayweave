@@ -13,10 +13,10 @@ export function clampRect(rect: Rect, area: Rect): Rect {
   const width = Math.min(rect.width, area.width), height = Math.min(rect.height, area.height)
   return { width, height, x: Math.round(Math.max(area.x, Math.min(rect.x, area.x + area.width - width))), y: Math.round(Math.max(area.y, Math.min(rect.y, area.y + area.height - height))) }
 }
-export function dockRect(rect: Rect, area: Rect, edge: Edge, scale: number, reminders = 0): Rect {
+export function dockRect(rect: Rect, area: Rect, edge: Edge, scale: number, reminders = 0, frame = { width: 0, height: 0 }): Rect {
   const vertical = edge === 'left' || edge === 'right'
   const count=Math.max(0,Math.min(5,reminders))
-  const result = clampRect({ ...rect, width: Math.round((vertical ? 76 : 280+count*80) * scale), height: Math.round((vertical ? 248+(count ? 18+count*38 : 0) : 72) * scale) }, area)
+  const result = clampRect({ ...rect, width: Math.round((vertical ? 76 : 280+count*80) * scale) + frame.width, height: Math.round((vertical ? 248+(count ? 18+count*38 : 0) : 72) * scale) + frame.height }, area)
   if (edge === 'right') result.x = area.x + area.width - result.width
   if (edge === 'left') result.x = area.x
   if (edge === 'top') result.y = area.y
