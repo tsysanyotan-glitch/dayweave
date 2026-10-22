@@ -1,3 +1,4 @@
+import { clockIso, clockNow } from './time'
 import { useEffect, useState, type FormEvent } from 'react'
 import { KeyRound } from 'lucide-react'
 import { dataCloud } from './cloud'
@@ -27,7 +28,7 @@ export function ApiKeys({ scope }: {scope:string}) {
       const token='dw_'+Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('')
       const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(token))
       const token_hash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,'0')).join('')
-      const {data,error}=await dataCloud!.from('task_api_keys').insert({user_id:scope,name:name.trim(),token_hash,prefix:token.slice(0,15),permissions:readOnly?['tasks:read']:['tasks:read','tasks:write'],expires_at:new Date(Date.now()+Number(days)*86400000).toISOString()}).select(columns).single()
+      const {data,error}=await dataCloud!.from('task_api_keys').insert({user_id:scope,name:name.trim(),token_hash,prefix:token.slice(0,15),permissions:readOnly?['tasks:read']:['tasks:read','tasks:write'],expires_at:new Date(clockNow()+Number(days)*86400000).toISOString()}).select(columns).single()
       if(error)throw error
       setKeys(current=>[data as ApiKey,...current]);setSecret(token);setName('')
     } catch { setError('密钥创建失败，请检查网络后重试。') }
@@ -37,7 +38,7 @@ export function ApiKeys({ scope }: {scope:string}) {
     if(busy)return
     setBusy(true);setError('')
     try {
-      const now=new Date().toISOString()
+      const now=clockIso()
       const {error}=await dataCloud!.from('task_api_keys').update({revoked_at:now}).eq('user_id',scope).eq('id',id)
       if(error)throw error
       setKeys(current=>current.map(k=>k.id===id?{...k,revoked_at:now}:k));setSecret('')
@@ -54,7 +55,7 @@ export function ApiKeys({ scope }: {scope:string}) {
     </form>
     {secret&&<div className="api-secret"><label>新密钥（仅显示一次）<textarea readOnly rows={3} value={secret} spellCheck={false}/></label><div className="row-actions"><button onClick={()=>void navigator.clipboard.writeText(secret).then(()=>setCopied(true)).catch(()=>setError('请选中上方密钥手动复制。'))}>{copied?'已复制':'复制密钥'}</button><button onClick={()=>setSecret('')}>已保存，隐藏密钥</button></div></div>}
     {error&&<p className="error" role="alert">{error}</p>}
-    <div className="api-key-list">{keys.map(k=><div className="api-key-item" key={k.id}><div><strong>{k.name}</strong><small>{k.prefix}… · {k.permissions.includes('tasks:write')?'读写':'只读'}</small><small>{k.revoked_at?'已撤销':Date.parse(k.expires_at)<=Date.now()?'已过期':'到期 '+new Date(k.expires_at).toLocaleDateString('zh-CN')}</small></div>{!k.revoked_at&&Date.parse(k.expires_at)>Date.now()&&<button className="text-button" disabled={busy} aria-label={'撤销密钥：'+k.name} onClick={()=>void revoke(k.id)}>撤销</button>}</div>)}</div>
+    <div className="api-key-list">{keys.map(k=><div className="api-key-item" key={k.id}><div><strong>{k.name}</strong><small>{k.prefix}… · {k.permissions.includes('tasks:write')?'读写':'只读'}</small><small>{k.revoked_at?'已撤销':Date.parse(k.expires_at)<=clockNow()?'已过期':'到期 '+new Date(k.expires_at).toLocaleDateString('zh-CN', {timeZone:'Asia/Shanghai'})}</small></div>{!k.revoked_at&&Date.parse(k.expires_at)>clockNow()&&<button className="text-button" disabled={busy} aria-label={'撤销密钥：'+k.name} onClick={()=>void revoke(k.id)}>撤销</button>}</div>)}</div>
     <details className="api-help"><summary>接口地址与使用文档</summary><code>{endpoint}</code><p className="muted">请求头：Authorization: Bearer 个人密钥。支持 GET 查询、POST 新建、PATCH 修改和 DELETE 移入回收站。修改时携带 If-Match 版本号。</p><a href="https://github.com/tsysanyotan-glitch/dayweave/blob/main/docs/api.md" target="_blank" rel="noreferrer" onClick={event=>{if('__TAURI_INTERNALS__' in window){event.preventDefault();void import('@tauri-apps/plugin-opener').then(({openUrl})=>openUrl('https://github.com/tsysanyotan-glitch/dayweave/blob/main/docs/api.md')).catch(()=>setError('文档暂未打开，请复制接口地址或稍后重试。'))}}}>查看完整接口文档与调用示例</a></details>
   </section>
 }

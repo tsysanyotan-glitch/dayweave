@@ -40,9 +40,17 @@ try {
   if($LASTEXITCODE -ne 0) { throw 'Reminder and tray checks failed.' }
   $owned[-1].WaitForExit(10000) | Out-Null
   Start-Sleep -Seconds 2
+  # Native scheduler must survive offline app restart in the same Windows login.
+  $env:DAYWEAVE_CLOCK_OFFLINE = '1'
   Start-TestApp
   rtk proxy node tests/windows/reminders-restart.mjs
   if($LASTEXITCODE -ne 0) { throw 'Reminder startup checks failed.' }
+  $owned[-1].WaitForExit(10000) | Out-Null
+  Start-Sleep -Seconds 2
+  $env:WEBVIEW2_USER_DATA_FOLDER = $profile + '-no-time'
+  Start-TestApp
+  rtk proxy node tests/windows/no-time.mjs
+  if($LASTEXITCODE -ne 0) { throw 'Uncalibrated offline startup checks failed.' }
   $owned[-1].WaitForExit(10000) | Out-Null
 } finally {
   Remove-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'DayWeave Native Test' -ErrorAction SilentlyContinue
@@ -50,5 +58,6 @@ try {
   $env:WEBVIEW2_USER_DATA_FOLDER = $previousProfile
   $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = $previousArguments
   Remove-Item Env:DAYWEAVE_NATIVE_TEST -ErrorAction SilentlyContinue
+  Remove-Item Env:DAYWEAVE_CLOCK_OFFLINE -ErrorAction SilentlyContinue
   Pop-Location
 }

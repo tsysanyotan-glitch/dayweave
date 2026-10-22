@@ -1,11 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    fs,
-    path::PathBuf,
-    sync::Mutex,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::{collections::HashMap, fs, path::PathBuf, sync::Mutex, time::Duration};
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_autostart::ManagerExt;
 
@@ -75,12 +69,6 @@ pub struct Snapshot {
     active: Vec<Item>,
     pending: Vec<Complete>,
 }
-fn now() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as i64
-}
 fn save(state: &Desktop, runtime: &Runtime) -> Result<(), String> {
     fs::create_dir_all(state.path.parent().ok_or("提醒目录无效")?).map_err(|e| e.to_string())?;
     let tmp = state.path.with_extension("tmp");
@@ -148,7 +136,9 @@ pub fn desktop_snapshot(app: AppHandle, state: State<Desktop>) -> Result<Snapsho
     Ok(Snapshot {
         settings: r.disk.settings.clone(),
         autostart: app.autolaunch().is_enabled().map_err(|e| e.to_string())?,
-        active: active(&r, now()),
+        active: crate::clock::now(&app)
+            .map(|at| active(&r, at))
+            .unwrap_or_default(),
         pending: r.disk.pending.clone(),
     })
 }
@@ -243,7 +233,8 @@ pub fn reminder_action(
     let response = r.disk.responses.entry(key.clone()).or_default();
     match action.as_str() {
         "snooze" => {
-            response.snooze_until = Some(now() + 300000);
+            response.snooze_until =
+                Some(crate::clock::now(&app).ok_or("北京时间尚未校准")? + 300000);
             response.dismissed = false;
         }
         "dismiss" | "complete" => response.dismissed = true,
@@ -258,7 +249,9 @@ pub fn reminder_action(
         });
     }
     save(&state, &r)?;
-    let empty = active(&r, now()).is_empty();
+    let empty = crate::clock::now(&app)
+        .map(|at| active(&r, at).is_empty())
+        .unwrap_or(true);
     drop(r);
     if empty {
         if let Some(win) = app.get_webview_window("reminder") {
@@ -341,6 +334,7 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         Disk::default()
     };
     let hidden = disk.settings.start_hidden;
+    crate::clock::setup(app.handle());
     app.manage(Desktop {
         path,
         inner: Mutex::new(Runtime {
@@ -393,7 +387,10 @@ pub fn setup(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             if !r.ready {
                 continue;
             }
-            let due = active(&r, now());
+            let Some(at) = crate::clock::now(&handle) else {
+                continue;
+            };
+            let due = active(&r, at);
             let keys: Vec<_> = due.iter().map(|i| i.key.clone()).collect();
             let sound = r.disk.settings.sound;
             drop(r);

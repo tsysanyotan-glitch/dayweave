@@ -1,24 +1,28 @@
 import { useEffect, useState } from 'react'
 import { beijingTime } from './beijingTime'
+import { clockDate } from './time'
+import { subscribeClock } from './clock'
 
 /** Mounted only in the Windows edge rail; no timer runs in the expanded view. */
 export function BeijingClock() {
-  const [now, setNow] = useState(() => new Date())
+  const [now, setNow] = useState(clockDate)
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>
     const update = () => {
       clearTimeout(timer)
-      const current = new Date()
+      const current = clockDate()
       setNow(current)
       timer = setTimeout(update, 60000 - current.getTime() % 60000 + 25)
     }
     update()
+    const release = subscribeClock(update)
     // WebView timers may pause during sleep or while the window is hidden.
     document.addEventListener('visibilitychange', update)
     window.addEventListener('focus', update)
     window.addEventListener('pageshow', update)
     return () => {
       clearTimeout(timer)
+      release()
       document.removeEventListener('visibilitychange', update)
       window.removeEventListener('focus', update)
       window.removeEventListener('pageshow', update)

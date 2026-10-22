@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+test.use({ timezoneId: 'America/Los_Angeles' })
 async function create(page:Page,title:string,date:string,status:string){
   await page.locator('.new-task').click();const form=page.getByRole('dialog')
   await form.getByLabel('任务名称').fill(title);await form.getByLabel('安排日期').fill(date)
@@ -10,7 +11,7 @@ async function records(page:Page){return page.evaluate(async()=>{
   try{return await new Promise<{task:{id:string;date:string;status:string;title:string}}[]>((resolve,reject)=>{const request=db.transaction('records').objectStore('records').getAll();request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}finally{db.close()}
 })}
 test('in-progress work carries over midnight repeatedly and catches up offline after restart',async({page,context})=>{
-  await page.clock.install({time:new Date(2026,9,20,23,59,45)})
+  await page.clock.install({time:new Date('2026-10-20T15:59:45Z')})
   await page.goto('/');await page.waitForFunction(()=>!!navigator.serviceWorker.controller)
   await create(page,'顺延任务','2026-10-20','doing')
   await create(page,'仍然待办','2026-10-20','todo')
@@ -23,7 +24,7 @@ test('in-progress work carries over midnight repeatedly and catches up offline a
   await expect.poll(async()=> (await records(page)).find(r=>r.task.id===original)?.task.date).toBe('2026-10-21')
   await page.clock.fastForward(86400000)
   await expect.poll(async()=> (await records(page)).find(r=>r.task.id===original)?.task.date).toBe('2026-10-22')
-  await page.clock.setSystemTime(new Date(2026,9,24,12));await page.reload()
+  await page.clock.setSystemTime(new Date('2026-10-24T04:00:00Z'));await page.reload()
   await expect(page.locator('.group-doing').getByTestId('task-row')).toContainText('顺延任务')
   const saved=await records(page)
   expect(saved).toHaveLength(4)
@@ -38,7 +39,7 @@ test('in-progress work carries over midnight repeatedly and catches up offline a
   expect((await records(page)).find(r=>r.task.id===original)?.task.status).toBe('done')
 })
 test('midnight preserves an explicitly selected historical date',async({page})=>{
-  await page.clock.install({time:new Date(2026,9,20,23,59,45)})
+  await page.clock.install({time:new Date('2026-10-20T15:59:45Z')})
   await page.goto('/');await create(page,'历史待办','2026-10-19','todo')
   await page.getByRole('button',{name:'选择日期 2026-10-19',exact:true}).click()
   await expect(page.getByTestId('task-row')).toContainText('历史待办')

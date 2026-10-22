@@ -1,4 +1,6 @@
 import { useSyncExternalStore } from 'react'
+import { clockIso, clockNow } from './time'
+import { subscribeClock } from './clock'
 import { cloud, dataCloud } from './cloud'
 import { loadRecords, saveRecords } from './db'
 import { copyLocalOutputScope } from './outputs'
@@ -46,7 +48,7 @@ export function scheduleSync() {
 export async function saveTask(task: Task) {
   const scope = snapshot.scope
   const baseUpdatedAt = task.updatedAt
-  const clean = validateTask({ ...task, updatedAt: new Date().toISOString() })
+  const clean = validateTask({ ...task, updatedAt: clockIso() })
   await commit(records => {
     const current = records.find(r => r.task.id === clean.id)
     if (current && current.task.updatedAt !== baseUpdatedAt) throw new Error('任务在编辑期间发生了变化。请保留当前输入，重新打开任务后再保存。')
@@ -59,14 +61,14 @@ export async function patchTask(id: string, transform: (task: Task) => Task, sco
   await commit(records => {
     const record = records.find(r => r.task.id === id)
     if (!record) return []
-    return [{ ...record, task: validateTask({ ...transform(record.task), updatedAt: new Date().toISOString() }), dirty: true, mutationId: uuid() }]
+    return [{ ...record, task: validateTask({ ...transform(record.task), updatedAt: clockIso() }), dirty: true, mutationId: uuid() }]
   }, scope)
   scheduleSync()
 }
 export async function importTasks(text: string) {
   const tasks = readBackup(text)
   const scope = snapshot.scope
-  const now = new Date().toISOString()
+  const now = clockIso()
   const records = tasks.map(task => ({ scope, task: { ...task, id: uuid(), createdAt: now, updatedAt: now, steps: task.steps.map(s => ({ ...s, id: uuid() })) }, serverRevision: 0, dirty: true, mutationId: uuid() }))
   await commit(records, scope); scheduleSync(); return records.length
 }
@@ -91,7 +93,7 @@ export async function moveTask(id: string, status: Status, beforeId?: string, pe
     const left = target > 0 ? taskOrder(peers[target - 1]) : undefined
     const right = target < peers.length ? taskOrder(peers[target]) : undefined
     const order = left === undefined ? (right ?? 0) - 1024 : right === undefined ? left + 1024 : (left + right) / 2
-    const now = new Date().toISOString()
+    const now = clockIso()
     let moved = [{ ...current.task, status, order, waiting: status === 'done' ? false : current.task.waiting }]
     if ((left !== undefined && order <= left) || (right !== undefined && order >= right)) {
       const reordered = [...peers]; reordered.splice(target, 0, moved[0]); moved = reordered.map((task, index) => ({ ...task, order: index * 1024 }))
@@ -102,7 +104,7 @@ export async function moveTask(id: string, status: Status, beforeId?: string, pe
 }
 export async function clearCloudReference(path: string, scope: string) {
   if (snapshot.scope !== scope) throw new Error('账号已切换，请回到原账号后继续')
-  await commit(records => records.filter(r => (r.task.outputs ?? []).some(o => o.cloudPath === path)).map(record => ({ ...record, task: validateTask({ ...record.task, outputs: record.task.outputs.map(o => o.cloudPath === path ? { ...o, cloudPath: undefined } : o), updatedAt: new Date().toISOString() }), dirty: true, mutationId: uuid() })), scope)
+  await commit(records => records.filter(r => (r.task.outputs ?? []).some(o => o.cloudPath === path)).map(record => ({ ...record, task: validateTask({ ...record.task, outputs: record.task.outputs.map(o => o.cloudPath === path ? { ...o, cloudPath: undefined } : o), updatedAt: clockIso() }), dirty: true, mutationId: uuid() })), scope)
   scheduleSync()
 }
 export async function resolveConflict(id: string, choice: 'local' | 'remote' | 'both') {
@@ -113,7 +115,7 @@ export async function resolveConflict(id: string, choice: 'local' | 'remote' | '
   const records: LocalRecord[] = choice === 'local'
     ? [{ ...current, serverRevision: remote.serverRevision, mutationId: uuid(), dirty: true, conflict: undefined }]
     : [remote]
-  if (choice === 'both') records.push({ scope, task: { ...current.task, id: uuid(), title: (current.task.title.slice(0, 290) + '（本地副本）'), updatedAt: new Date().toISOString() }, serverRevision: 0, dirty: true, mutationId: uuid() })
+  if (choice === 'both') records.push({ scope, task: { ...current.task, id: uuid(), title: (current.task.title.slice(0, 290) + '（本地副本）'), updatedAt: clockIso() }, serverRevision: 0, dirty: true, mutationId: uuid() })
   await commit(records, scope); scheduleSync()
 }
 
@@ -155,7 +157,7 @@ async function performSync() {
       await commit(records => (data as RemoteRow[]).map(row => mergeRemote(records.find(r => r.task.id === row.id), row)), scope)
       if (data.length < 500) break
     }
-    if (snapshot.scope === scope) emit({ lastSync: new Date().toISOString() })
+    if (snapshot.scope === scope) emit({ lastSync: clockIso() })
   } catch (error) {
     if (snapshot.scope === scope) emit({ error: '同步暂未完成：' + (error instanceof Error ? error.message : (error as { message?: string })?.message || '请检查网络后重试') })
   } finally { if (snapshot.scope === scope) emit({ syncing: false }) }
@@ -189,9 +191,11 @@ function checkDay() {
   if (snapshot.ready && snapshot.today !== dateKey()) void commit([], snapshot.scope)
     .catch(error => emit({ error: '任务顺延暂未保存：' + String(error) }))
 }
+let midnightTimer: ReturnType<typeof setTimeout>
 function watchMidnight() {
-  const next = new Date(); next.setHours(24, 0, 0, 50)
-  setTimeout(() => { checkDay(); watchMidnight() }, Math.max(50, next.getTime() - Date.now()))
+  clearTimeout(midnightTimer)
+  const until = 86400000 - ((clockNow() + 8 * 3600000) % 86400000) + 50
+  midnightTimer = setTimeout(() => { checkDay(); watchMidnight() }, until)
 }
 export function initialize() {
   if (started) return
@@ -206,6 +210,7 @@ export function initialize() {
   window.addEventListener('focus', () => { checkDay(); scheduleSync() })
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { checkDay(); scheduleSync() } })
   watchMidnight()
+  subscribeClock(() => { checkDay(); watchMidnight() })
   // Low-frequency fallback also covers missed Realtime events after waking the computer.
   setInterval(() => { if (document.visibilityState === 'visible') { checkDay(); scheduleSync() } }, 60000)
 }

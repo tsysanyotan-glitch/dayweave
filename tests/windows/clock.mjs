@@ -11,8 +11,19 @@ const cursor = (x,y) => execFileSync('powershell.exe',['-NoProfile','-Command',`
 let originalCursor
 try {
   originalCursor = await page.evaluate(() => window.__TAURI_INTERNALS__.invoke('plugin:window|cursor_position'))
+  const cdp=await context.newCDPSession(page)
+  await cdp.send('Emulation.setTimezoneOverride',{timezoneId:'Pacific/Honolulu'})
+  await page.clock.setFixedTime(new Date('2001-01-01T00:00:00Z'))
   await page.evaluate(() => { localStorage.setItem('dayweave-compact','true');localStorage.setItem('dayweave-edge-dock','true');localStorage.setItem('dayweave-theme','dark') })
   await page.reload()
+  await expect(page.locator('.app-shell')).toBeVisible({timeout:20000})
+  const nativeTime=await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('time_snapshot'))
+  expect(nativeTime.source).toMatch(/^https:\/\//)
+  expect(Math.abs(nativeTime.epochMs-Date.now())).toBeLessThan(5000)
+  const appNow=await page.evaluate(()=>({now:Date.now(),iso:new Date().toISOString(),title:document.querySelector('.compact-summary strong')?.textContent}))
+  expect(Math.abs(appNow.now-nativeTime.epochMs)).toBeLessThan(1000)
+  expect(appNow.iso).not.toContain('2001-')
+  checks.push('Live HTTPS calibration ignores a fixed 2001 device clock and Honolulu timezone, including Date.now used by Auth SDK')
   const monitor = await page.evaluate(() => window.__TAURI_INTERNALS__.invoke('plugin:window|current_monitor',{label:'main'}))
   const area = monitor.workArea, scale = monitor.scaleFactor
   const center = {x:area.position.x+Math.round(area.size.width/2),y:area.position.y+Math.round(area.size.height/2)}
@@ -47,21 +58,21 @@ try {
   }
   // Exercise the actual mounted React clock at a Beijing year boundary. The host
   // timezone is irrelevant; no OS clock/timezone or user's data is changed.
-  await page.clock.install({time:new Date('2026-12-31T15:59:59.500Z')})
-  await page.clock.pauseAt(new Date('2026-12-31T15:59:59.500Z'))
-  await page.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')))
+  await page.evaluate(epochMs=>window.__TAURI_INTERNALS__.invoke('time_test_set',{epochMs}),Date.parse('2026-12-31T15:59:58Z'))
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')))
   const clock=page.locator('.rail-clock')
   await expect(clock.locator('.rail-clock-time')).toHaveText('23:59')
-  await page.clock.runFor(600)
   await expect(clock.locator('.rail-clock-time')).toHaveText('00:00')
   await expect(clock.locator('.rail-clock-date')).toHaveText('01月01日')
   await expect(clock.locator('.rail-clock-weekday')).toHaveText('周五')
-  await page.clock.setSystemTime(new Date('2027-01-02T04:35:00Z'))
+  await page.evaluate(epochMs=>window.__TAURI_INTERNALS__.invoke('time_test_set',{epochMs}),Date.parse('2027-01-02T04:35:00Z'))
   await page.evaluate(()=>window.dispatchEvent(new Event('focus')))
   await expect(clock.locator('.rail-clock-time')).toHaveText('12:35')
   await expect(clock).toHaveAttribute('datetime','2027-01-02T12:35:00+08:00')
   checks.push('Live timer advances Beijing midnight/year; focus after simulated sleep resynchronizes immediately')
-  await page.clock.resume()
+  await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('time_test_set',{epochMs:null}))
+  await expect.poll(async()=>(await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('time_snapshot'))).source,{timeout:20000}).toMatch(/^https:\/\//)
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus')))
   await show()
   await page.evaluate(()=>localStorage.setItem('dayweave-theme','light'))
   await page.reload()
@@ -73,7 +84,7 @@ try {
   await page.screenshot({path:'artifacts/windows-v061-right-light.png'})
   checks.push('Light theme clock remains readable')
   expect(errors).toEqual([])
-  fs.writeFileSync('artifacts/windows-v061-clock-results.json',JSON.stringify({checks,errors,scale},null,2))
+  fs.writeFileSync('artifacts/windows-v071-clock-results.json',JSON.stringify({checks,errors,scale,nativeTime,appNow},null,2))
   const closed=page.waitForEvent('close');await invoke('close');await closed
   console.log('PASS Windows clock: all four screen edges, light/dark, live Beijing midnight/date/year, resume refresh')
 } catch(e) {await page.screenshot({path:'artifacts/windows-v061-clock-failure.png'}).catch(()=>{});throw e}

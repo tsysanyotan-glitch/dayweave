@@ -1,3 +1,4 @@
+import { clockNow } from './time'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { desktop } from './platform'
 import { patchTask, useTasks } from './store'
@@ -11,7 +12,7 @@ export async function nativeSnapshot(){const {invoke}=await import('@tauri-apps/
 export function useDesktopReminders(report:(m:string)=>void, quick:()=>void) {
   const state=useTasks(), current=useRef(state); current.current=state
   const [settings,setSettings]=useState<DesktopSettings>(defaults),[autostart,setAutostart]=useState(false)
-  const [now,setNow]=useState(Date.now),queue=useRef(Promise.resolve()),applying=useRef(false)
+  const [now,setNow]=useState(clockNow),queue=useRef(Promise.resolve()),applying=useRef(false)
   const refresh=useCallback(async()=>{
     const snapshot=await nativeSnapshot();setSettings(snapshot.settings);setAutostart(snapshot.autostart)
     if(applying.current || !current.current.ready)return
@@ -23,8 +24,8 @@ export function useDesktopReminders(report:(m:string)=>void, quick:()=>void) {
     if(!desktop)return
     let disposed=false;const releases:(()=>void)[]=[]
     void (async()=>{const {listen}=await import('@tauri-apps/api/event');for(const [event,handler] of [['dayweave-reminders-changed',()=>{void refresh().catch(e=>report(String(e)))}],['dayweave-quick-alarm',quick]] as const){const release=await listen(event,handler);if(disposed)release();else releases.push(release)}await refresh()})().catch(e=>report(String(e)))
-    const timer=setInterval(()=>setNow(Date.now()),30000)
-    const wake=()=>setNow(Date.now());window.addEventListener('focus',wake)
+    const timer=setInterval(()=>setNow(clockNow()),30000)
+    const wake=()=>setNow(clockNow());window.addEventListener('focus',wake)
     return()=>{disposed=true;releases.forEach(fn=>fn());clearInterval(timer);window.removeEventListener('focus',wake)}
   },[report,quick,refresh])
   useEffect(()=>{

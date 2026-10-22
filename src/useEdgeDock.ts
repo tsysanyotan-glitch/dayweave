@@ -70,8 +70,8 @@ export function useEdgeDock(compact: boolean, ready: boolean, changing: RefObjec
           if (collapsedRef.current) { if (hovering) await resizeDock(false); return }
           if (hovering || document.querySelector('dialog[open]') || document.activeElement?.matches('input,textarea,select,[contenteditable=true]')) { leaveAt.current = 0; return }
           if (await win.isMinimized()) return
-          if (!leaveAt.current) leaveAt.current = Date.now()
-          if (Date.now() - leaveAt.current > 850) await resizeDock(true)
+          if (!leaveAt.current) leaveAt.current = performance.now()
+          if (performance.now() - leaveAt.current > 850) await resizeDock(true)
         })().catch(e => report(String(e))).finally(() => { pollBusy.current = false })
       }, 350)
     }

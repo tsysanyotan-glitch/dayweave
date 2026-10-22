@@ -1,3 +1,4 @@
+import { clockDate, clockIso } from './time.ts'
 export type Status = 'todo' | 'doing' | 'done'
 export type Priority = 'high' | 'medium' | 'low'
 export type TaskKind = 'planned' | 'issue' | 'alarm'
@@ -23,18 +24,19 @@ export const priorityLabels: Record<Priority, string> = { high: '高优先', med
 export const kindLabels: Record<TaskKind, string> = { planned: '计划任务', issue: '零碎问题', alarm: '闹钟' }
 export const taskKind = (task: Task): TaskKind => task.alarm ? 'alarm' : task.kind ?? 'planned'
 export const uuid = () => crypto.randomUUID()
-export function dateKey(date = new Date()): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+export function dateKey(date = clockDate()): string {
+  const beijing = new Date(date.getTime() + 8 * 3600000)
+  return `${beijing.getUTCFullYear()}-${String(beijing.getUTCMonth() + 1).padStart(2, '0')}-${String(beijing.getUTCDate()).padStart(2, '0')}`
 }
-export function parseDate(value: string): Date { return new Date(value + 'T12:00:00') }
+export function parseDate(value: string): Date { return new Date(value + 'T04:00:00Z') }
 export function shiftDate(value: string, days: number): string {
-  const date = parseDate(value); date.setDate(date.getDate() + days); return dateKey(date)
+  const date = parseDate(value); date.setUTCDate(date.getUTCDate() + days); return dateKey(date)
 }
 export function validDate(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(+parseDate(value)) && dateKey(parseDate(value)) === value
 }
 export function newTask(date = dateKey()): Task {
-  const now = new Date().toISOString()
+  const now = clockIso()
   return { id: uuid(), title: '', note: '', date, status: 'todo', kind: 'planned', priority: 'medium', assignee: '自己', project: '', link: '', waiting: false, starred: false, steps: [], outputs: [], createdAt: now, updatedAt: now, deletedAt: null }
 }
 export function safeLink(value: string): string | null {
@@ -84,7 +86,7 @@ export function validateOutput(value: unknown): Output {
 }
 export const taskOrder = (t: Task) => t.order ?? (t.starred ? -1e15 : 0) + ({ high: 0, medium: 1e14, low: 2e14 }[t.priority]) + Date.parse(t.createdAt)
 // Move the original record, preserving attachment IDs and all work already done.
-export function carryForward(records: LocalRecord[], today = dateKey(), now = new Date().toISOString()): LocalRecord[] {
+export function carryForward(records: LocalRecord[], today = dateKey(), now = clockIso()): LocalRecord[] {
   return records.filter(r => !r.conflict && !r.task.deletedAt && r.task.status === 'doing' && r.task.date < today)
     .map(r => ({ ...r, task: { ...r.task, date: today, updatedAt: now }, dirty: true, mutationId: uuid() }))
 }

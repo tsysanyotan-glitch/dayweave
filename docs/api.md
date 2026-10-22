@@ -151,7 +151,7 @@ console.log(result.data.task.id, result.data.revision)
 
 ## 7. 自托管 / 新项目部署
 
-顺序执行仓库迁移，部署 `supabase/functions/dayweave-api/index.ts` 及其相对依赖 `handler.ts`、`src/model.ts`、本 OpenAPI JSON。函数名为 `dayweave-api`，`verify_jwt=false`：入口使用个人密钥自行鉴权，每次请求通过仅服务端可执行的 `authorize_task_api` 验证。
+顺序执行仓库迁移，部署 `supabase/functions/dayweave-api/index.ts` 及其相对依赖 `handler.ts`、`src/model.ts`、`src/time.ts`、本 OpenAPI JSON。函数名为 `dayweave-api`，`verify_jwt=false`：入口使用个人密钥自行鉴权，每次请求通过仅服务端可执行的 `authorize_task_api` 验证。
 
 Supabase Edge Runtime 自动注入 `SUPABASE_URL` 和 `SUPABASE_SERVICE_ROLE_KEY`，服务端 key 仅用于函数内部；客户端始终只含 publishable key。`commit_task_api` 仅授予 service_role 执行权限，以原子版本比较写入并触发原有 Realtime；普通用户不能直接调用它指定其他用户。部署其他项目时同步修改 OpenAPI servers 和客户端云配置。
 

@@ -8,6 +8,12 @@
 
 任务类型补充设计：[电脑](docs/design/dayweave-task-types-desktop.png) · [手机](docs/design/dayweave-task-types-mobile.png) · [提示词](docs/design/task-types-prompts.md)。以上设计图均在对应功能编码前生成。
 
+## v0.7.1 Windows 统一北京时间
+
+Windows 从 HTTPS 服务校准时间，再以包含睡眠时长的运行计数计时；主界面日期、北京零点顺延、闹钟、截止提醒、任务时间戳及登录有效期使用同一来源。修改电脑时间或时区不会改变应用的时间。完整说明与验证见 [北京时间更新](docs/windows-v071.md)。
+
+首次启动或重新登录 Windows 后需要联网校准；同一次 Windows 登录期间，断网和退出应用再打开可沿用此前校准。没有可信校准时等待联网，不采用电脑日期修改任务。仅重建 Windows 版，Android 安装包保持原版本。
+
 ## v0.7.0 Windows 闹钟、截止时间与托盘
 
 - 「快捷闹钟」独立入口，紫色铃铛区分普通任务；支持直接选北京时间或 +5 / +15 / +30 / +60 分钟。

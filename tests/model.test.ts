@@ -9,10 +9,10 @@ function fixture() {
   return { local, remote }
 }
 describe('calendar and validation', () => {
-  it('keeps dates local and handles month/leap transitions', () => {
+  it('keeps dates in Beijing and handles month/leap transitions', () => {
     expect(shiftDate('2024-02-28', 1)).toBe('2024-02-29')
     expect(shiftDate('2026-12-31', 1)).toBe('2027-01-01')
-    expect(dateKey(new Date(2026, 9, 20, 0, 1))).toBe('2026-10-20')
+    expect(dateKey(new Date('2026-10-19T16:01:00Z'))).toBe('2026-10-20')
     expect(validDate('2026-02-31')).toBe(false)
     expect(validDate('2026-13-01')).toBe(false)
   })

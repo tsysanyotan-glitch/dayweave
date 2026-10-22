@@ -1,3 +1,4 @@
+import { clockNow } from './time'
 import { useEffect, useState, type FormEvent } from 'react'
 import { Mail } from 'lucide-react'
 import { cloud } from './cloud'
@@ -7,7 +8,7 @@ type Delivery = { email: string; sentAt: number; retryAt: number }
 function rememberedDelivery(): Delivery | null {
   try {
     const value = JSON.parse(sessionStorage.getItem(storageKey) || 'null') as Delivery | null
-    return value && typeof value.email === 'string' && Number.isFinite(value.sentAt) && Number.isFinite(value.retryAt) && value.sentAt <= Date.now() && Date.now() - value.sentAt < 600000 ? value : null
+    return value && typeof value.email === 'string' && Number.isFinite(value.sentAt) && Number.isFinite(value.retryAt) && value.sentAt <= clockNow() && clockNow() - value.sentAt < 600000 ? value : null
   } catch { return null }
 }
 function authMessage(error: unknown) {
@@ -25,25 +26,25 @@ export function EmailOtpForm() {
   const [email, setEmail] = useState(() => rememberedDelivery()?.email || '')
   const [code, setCode] = useState('')
   const [retryAt, setRetryAt] = useState(() => rememberedDelivery()?.retryAt || 0)
-  const [now, setNow] = useState(Date.now)
+  const [now, setNow] = useState(clockNow)
   const [busy, setBusy] = useState<'send' | 'verify' | null>(null)
   const [error, setError] = useState('')
   const remaining = Math.max(0, Math.ceil((retryAt - now) / 1000))
-  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer) }, [])
+  useEffect(() => { const timer = setInterval(() => setNow(clockNow()), 1000); return () => clearInterval(timer) }, [])
   const send = async (event?: FormEvent) => {
     event?.preventDefault()
-    if (!cloud || busy || Date.now() < retryAt) return
+    if (!cloud || busy || clockNow() < retryAt) return
     const address = (delivery?.email || email).trim().toLowerCase()
     setBusy('send'); setError('')
     try {
       const { error } = await cloud.auth.signInWithOtp({ email: address, options: { shouldCreateUser: true } })
       if (error) throw error
-      const sentAt = Date.now()
+      const sentAt = clockNow()
       const next = { email: address, sentAt, retryAt: sentAt + 60000 }
       setDelivery(next); setEmail(address); setRetryAt(next.retryAt); setNow(sentAt); setCode('')
       try { sessionStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* Login also works without session storage. */ }
     } catch (error) {
-      if ((error as { status?: number })?.status === 429) { setRetryAt(Date.now() + 60000); setNow(Date.now()) }
+      if ((error as { status?: number })?.status === 429) { setRetryAt(clockNow() + 60000); setNow(clockNow()) }
       setError(authMessage(error))
     } finally { setBusy(null) }
   }

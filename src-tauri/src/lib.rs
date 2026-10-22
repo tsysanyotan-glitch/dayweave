@@ -66,12 +66,17 @@ pub fn run() {
         desktop::desktop_action,
         desktop::reminders_sync,
         desktop::reminder_action,
-        desktop::reminder_complete_saved
+        desktop::reminder_complete_saved,
+        clock::time_snapshot,
+        clock::time_refresh,
+        clock::time_test_set
     ]);
     builder
         .run(tauri::generate_context!())
         .expect("无法启动日序");
 }
+#[cfg(windows)]
+mod clock;
 #[cfg(windows)]
 mod desktop;
 #[cfg(target_os = "android")]
