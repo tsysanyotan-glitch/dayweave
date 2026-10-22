@@ -71,7 +71,9 @@ try {
   await expect(clock).toHaveAttribute('datetime','2027-01-02T12:35:00+08:00')
   checks.push('Live timer advances Beijing midnight/year; focus after simulated sleep resynchronizes immediately')
   await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('time_test_set',{epochMs:null}))
-  await expect.poll(async()=>(await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('time_snapshot'))).source,{timeout:20000}).toMatch(/^https:\/\//)
+  // Explicit requests are coalesced for 30 s. Keep requesting until the test
+  // clock is replaced, without bypassing the production network rate limit.
+  await expect.poll(async()=>{await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('time_refresh'));return (await page.evaluate(()=>window.__TAURI_INTERNALS__.invoke('time_snapshot'))).source},{timeout:50000}).toMatch(/^https:\/\//)
   await page.evaluate(()=>window.dispatchEvent(new Event('focus')))
   await show()
   await page.evaluate(()=>localStorage.setItem('dayweave-theme','light'))
